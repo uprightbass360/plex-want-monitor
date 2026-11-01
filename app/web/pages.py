@@ -200,9 +200,19 @@ def _rows(store, items) -> list[dict]:
     ]
 
 
+SETUP_ERRORS = frozenset({"feed URL not set", "Plex not connected", "not signed in to Plex"})
+
+
+def _status_error(error: str) -> dict:
+    """Setup errors link to Settings; anything else is plain text."""
+    if error in SETUP_ERRORS:
+        return {"text": f"{error} \u2014 open Settings", "href": "/settings"}
+    return {"text": error, "href": None}
+
+
 def _header_status(store) -> dict:
     fetch, scan, wl = store.last_fetch(), store.last_scan(), store.last_fetch(source="watchlist")
-    errors = [log.error for log in (fetch, wl, scan) if log and not log.ok and log.error]
+    errors = [_status_error(log.error) for log in (fetch, wl, scan) if log and not log.ok and log.error]
     times = {"feed": fetch, "watchlist": wl, "scan": scan}
     stamps = [log.finished_at for log in times.values() if log and log.finished_at]
     now = _now()

@@ -643,3 +643,29 @@ def test_header_single_updated_with_tooltip(client, store, now, monkeypatch):
     assert html.count("updated") == 1 and "updated 2 min ago" in html
     assert 'title="feed 7 min ago · watchlist 2 min ago · scan never"' in html
     assert "<span>scan" not in html
+
+
+# ---- header setup-error links ----
+
+
+def test_header_links_setup_errors_to_settings(client):
+    client.post("/fragments/refresh")
+    html = client.get("/fragments/header-status").text
+    assert 'href="/settings"' in html and html.count('href="/settings"') == 2
+    assert "feed URL not set" in html and "Plex not connected" in html and "open Settings" in html
+
+
+def test_header_has_no_settings_link_when_healthy(connected_client, store, fetcher, fixture_bytes):
+    store.set_setting("feed_url", "https://rss.plex.tv/8e18-aaaa-81e5")
+    fetcher.queue(FetchResponse(200, fixture_bytes, None))
+    connected_client.post("/fragments/refresh")
+    assert 'href="/settings"' not in connected_client.get("/fragments/header-status").text
+
+
+def test_header_non_setup_error_is_plain_span(connected_client, store, fetcher):
+    store.set_setting("feed_url", "https://rss.plex.tv/8e18-aaaa-81e5")
+    fetcher.queue(FetchResponse(502, b"", None))
+    connected_client.post("/fragments/refresh")
+    html = connected_client.get("/fragments/header-status").text
+    assert "502" in html and 'href="/settings"' not in html
+    assert re.search(r'<span class="err-text"[^>]*>[^<]*502', html)
