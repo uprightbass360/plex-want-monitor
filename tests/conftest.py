@@ -1,3 +1,4 @@
+import time
 import json
 from pathlib import Path
 from datetime import UTC, datetime, timedelta
@@ -15,7 +16,7 @@ def now():
 
 @pytest.fixture
 def conn(tmp_path):
-    c = connect(tmp_path / "test.db")
+    c = connect(tmp_path / "test.db", check_same_thread=False)
     migrate(c)
     yield c
     c.close()
@@ -330,3 +331,56 @@ def connected_auth(make_auth, fake_plextv, fake_server, fake_http, clock, tmp_pa
 @pytest.fixture
 def auth_signed_out(plex_auth):
     return plex_auth
+
+
+@pytest.fixture
+def config(tmp_path):
+    from app.config import Config
+
+    return Config(data_dir=tmp_path, port=8787, log_level="INFO")
+
+
+def _client(config, store, auth, fetcher):
+    from fastapi.testclient import TestClient
+
+    from app.web.app import create_app
+
+    return TestClient(
+        create_app(config, store=store, auth=auth, fetcher=fetcher, scheduler_enabled=False)
+    )
+
+
+@pytest.fixture
+def client(config, store, plex_auth, fetcher):
+    return _client(config, store, plex_auth, fetcher)
+
+
+@pytest.fixture
+def connected_client(config, store, connected_auth, fetcher):
+    return _client(config, store, connected_auth, fetcher)
+
+
+class SlowAuth:
+    """Auth-like object whose server identity() sleeps and counts calls."""
+
+    def __init__(self):
+        self.calls = 0
+        outer = self
+
+        class _Server:
+            def identity(self):
+                outer.calls += 1
+                time.sleep(0.2)
+                from app.plex_client import PlexError
+
+                raise PlexError("slow")
+
+        self._server = _Server()
+
+    def server_client(self):
+        return self._server
+
+
+@pytest.fixture
+def slow_auth():
+    return SlowAuth()

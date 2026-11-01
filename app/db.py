@@ -35,9 +35,9 @@ CREATE INDEX items_status ON items(status);
 ]
 
 
-def connect(path: Path) -> sqlite3.Connection:
+def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     # isolation_level=None: autocommit; migrate() manages its own transaction.
-    conn = sqlite3.connect(path, isolation_level=None)
+    conn = sqlite3.connect(path, isolation_level=None, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA journal_mode=WAL")
