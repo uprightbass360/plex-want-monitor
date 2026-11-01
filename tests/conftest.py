@@ -36,3 +36,24 @@ def feed_items(fixture_bytes):
     from app.feed import parse_feed
 
     return parse_feed(fixture_bytes).items
+
+
+class FakeFetcher:
+    def __init__(self):
+        self._queue = []
+        self.last_url = None
+        self.last_etag = None
+
+    def queue(self, resp):
+        self._queue.append(resp)
+
+    def fetch(self, url, etag):
+        self.last_url, self.last_etag = url, etag
+        if not self._queue:
+            raise AssertionError("FakeFetcher queue is empty: no response queued for this fetch")
+        return self._queue.pop(0)
+
+
+@pytest.fixture
+def fetcher():
+    return FakeFetcher()
