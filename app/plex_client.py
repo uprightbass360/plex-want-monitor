@@ -105,7 +105,7 @@ class PlexTV:
         return _get_json(self.http, method, f"{PLEXTV}{path}", self._headers(token), PLEXTV_TIMEOUT)
 
     def create_pin(self) -> Pin:
-        d = self._call("POST", "/api/v2/pins?strong=true")
+        d = self._call("POST", "/api/v2/pins")
         try:
             return Pin(int(d["id"]), d["code"], _parse_time(d["expiresAt"]))
         except (KeyError, TypeError, ValueError):
