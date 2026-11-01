@@ -62,3 +62,20 @@ def test_migration_3_from_v2_database(tmp_path):
         conn.execute("insert into watchlist_guids(rating_key,guid,fetched_at) values ('r','g','t')")
     finally:
         conn.close()
+
+
+def test_migration_5_from_v4_database_defaults_authors_to_monitored(tmp_path):
+    conn = connect(tmp_path / "v4.db")
+    try:
+        conn.execute("BEGIN")
+        for version in range(4):
+            for stmt in MIGRATIONS[version].split(";"):
+                if stmt.strip():
+                    conn.execute(stmt)
+        conn.execute("PRAGMA user_version = 4")
+        conn.execute("COMMIT")
+        conn.execute("insert into authors(hash,first_seen,last_seen) values ('h','a','a')")
+        assert migrate(conn) == len(MIGRATIONS) >= 5
+        assert conn.execute("select monitored from authors").fetchone()[0] == 1
+    finally:
+        conn.close()

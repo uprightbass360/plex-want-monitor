@@ -138,7 +138,7 @@ def test_friends_resolve_api(client, signed_in_auth, seeded, fake_community):
     f = {x["hash"]: x for x in client.get("/api/settings").json()["friends"]}
     assert f["friend-a"]["username"] == "ann" and f["friend-a"]["name"] == "Ann"
     assert f["friend-b"]["name"] == "bob" and f["friend-b"]["avatar_url"] is None
-    assert set(f["friend-a"]) == {"hash", "label", "username", "display_name", "avatar_url", "name", "item_count"}
+    assert set(f["friend-a"]) == {"hash", "label", "username", "display_name", "avatar_url", "name", "item_count", "monitored"}
 
 
 def test_friends_resolve_signed_out_409(client, seeded):
@@ -224,3 +224,21 @@ def test_watchlist_sync_disabled_is_409(client, signed_in_auth, store):
     store.set_setting("own_watchlist_enabled", False)
     r = client.post("/api/watchlist/sync")
     assert r.status_code == 409 and r.json() == {"error": "own watchlist disabled"}
+
+
+def test_include_unmonitored_and_settings_monitored(client, seeded):
+    friends = {f["hash"]: f for f in client.get("/api/settings").json()["friends"]}
+    assert friends["friend-a"]["monitored"] is True
+    r = client.put("/api/settings", json={"friends": [{"hash": "friend-a", "monitored": False}]})
+    assert {f["hash"]: f["monitored"] for f in r.json()["friends"]} == {"friend-a": False, "friend-b": True}
+    assert client.get("/api/items?status=review,queued,grabbed,library,ignored").json()["count"] == 2
+    assert client.get("/api/items?status=review&in_feed=true&include_unmonitored=true").json()["count"] == 5
+    assert client.get("/api/items?status=review&in_feed=true&include_unmonitored=false").json()["count"] == 2
+    assert sum(client.get("/api/status").json()["counts"].values()) == 2
+    # label-only update leaves monitoring alone; an absent label is not cleared by a monitored-only update
+    client.put("/api/settings", json={"friends": [{"hash": "friend-a", "label": "Ann"}]})
+    f = {f["hash"]: f for f in client.get("/api/settings").json()["friends"]}["friend-a"]
+    assert f["monitored"] is False and f["label"] == "Ann"
+    client.put("/api/settings", json={"friends": [{"hash": "friend-a", "monitored": True}]})
+    f = {f["hash"]: f for f in client.get("/api/settings").json()["friends"]}["friend-a"]
+    assert f["monitored"] is True and f["label"] == "Ann"

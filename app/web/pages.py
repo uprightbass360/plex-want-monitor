@@ -241,7 +241,8 @@ def _context(request: Request, tab: Tab, f: Filters, **extra) -> dict:
         "json_href": _json_href(tab, f),
         "authors": {a.hash: a.name for a in people},
         "author_options": [
-            (a, by_tab.get(a.hash, 0)) for a in sorted(people, key=lambda a: a.name.casefold())
+            (a, by_tab.get(a.hash, 0))
+            for a in sorted(people, key=lambda a: a.name.casefold()) if a.monitored
         ],
         **extra,
     }
