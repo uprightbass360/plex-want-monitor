@@ -37,3 +37,26 @@ def test_builds_defaults_and_creates_data_dir(tmp_path):
     app = create_app(cfg, scheduler_enabled=False)
     assert cfg.db_path.exists()
     assert app.state.store.counts_by_status() is not None
+
+
+def test_default_resources_closed_on_shutdown(tmp_path):
+    from fastapi.testclient import TestClient
+
+    cfg = Config(data_dir=tmp_path / "d", port=8787, log_level="INFO")
+    app = create_app(cfg, scheduler_enabled=False)
+    with TestClient(app):
+        pass
+    import sqlite3
+
+    import pytest
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        app.state.store.conn.execute("select 1")
+
+
+def test_injected_resources_not_closed(config, store, plex_auth, fetcher):
+    from fastapi.testclient import TestClient
+
+    with TestClient(create_app(config, store=store, auth=plex_auth, fetcher=fetcher, scheduler_enabled=False)):
+        pass
+    store.conn.execute("select 1")

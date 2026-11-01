@@ -76,3 +76,35 @@ def test_item_to_dict_shape(store, feed_items, now):
     assert d["search_string"] == "Battle Beyond the Stars 1980"
     assert d["authors"] == [{"hash": "friend-a", "label": None}]
     assert "token" not in json.dumps(d).lower()
+
+
+def test_concurrent_threads_share_store_safely(store, feed_items, now):
+    import threading
+
+    from app.models import ItemFilter
+
+    new, _ = store.upsert_feed_items(feed_items, now)
+    errors = []
+
+    def writer():
+        try:
+            for i in range(40):
+                for item_id in new:
+                    store.set_status(item_id, "queued" if i % 2 == 0 else "review", now)
+        except Exception as e:
+            errors.append(e)
+
+    def reader():
+        try:
+            for _ in range(200):
+                store.list_items(ItemFilter())
+                store.counts_by_status()
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=f) for f in (writer, writer, reader, reader)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert errors == []
+    assert not store.conn.in_transaction
+    assert sum(store.counts_by_status().values()) == len(new)

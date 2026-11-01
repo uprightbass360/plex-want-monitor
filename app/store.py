@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import functools
 import sqlite3
+import threading
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -18,9 +20,28 @@ _ORDER = {
 }
 
 
+def _locked(fn):
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return fn(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _serialize_public_methods(cls):
+    """Hold the store's RLock for every public method: the connection is shared across threads."""
+    for name, fn in list(vars(cls).items()):
+        if callable(fn) and not name.startswith("_"):
+            setattr(cls, name, _locked(fn))
+    return cls
+
+
+@_serialize_public_methods
 class Store:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        self._lock = threading.RLock()
 
     def _tx(self):
         return _Tx(self.conn)

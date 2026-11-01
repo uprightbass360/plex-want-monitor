@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -35,18 +34,22 @@ def create_app(
     scheduler_enabled: bool = True,
 ) -> FastAPI:
     config = config or Config.from_env({})
-    logging.basicConfig(level=config.log_level.upper())
 
+    closers: list = []
     if store is None:
         config.data_dir.mkdir(parents=True, exist_ok=True)
         conn = connect(config.db_path, check_same_thread=False)
         migrate(conn)
+        closers.append(conn)
         store = Store(conn)
     if fetcher is None:
-        fetcher = HttpxFeedFetcher(httpx.Client(follow_redirects=True))
+        feed_http = httpx.Client(follow_redirects=True)
+        closers.append(feed_http)
+        fetcher = HttpxFeedFetcher(feed_http)
     if auth is None:
         config.data_dir.mkdir(parents=True, exist_ok=True)
         http = httpx.Client(follow_redirects=True)
+        closers.append(http)
         plextv = PlexTV("", http)
         auth = PlexAuth(
             config.plex_path,
@@ -68,6 +71,9 @@ def create_app(
             scheduler.stop()
             if task:
                 await task
+            for resource in closers:
+                with contextlib.suppress(Exception):
+                    resource.close()
 
     app = FastAPI(title="Want Monitor", lifespan=lifespan)
     app.state.config = config
