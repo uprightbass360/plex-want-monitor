@@ -21,7 +21,7 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 NOT_A_MATCH = "not-a-match"
 LIST_SORTS = ("newest", "oldest", "title")
-ROWS_PARTS = ["partials/rows.html", "partials/json_link.html"]
+QUEUE = "queue"
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,9 @@ class Tab:
     statuses: tuple[str, ...]
     actions: tuple[Action, ...]
     empty: str
+    page: str = "list.html"
+    rows: str = "partials/rows.html"
+    row: str = "partials/row.html"
 
 
 TABS: dict[str, Tab] = {
@@ -46,6 +49,8 @@ TABS: dict[str, Tab] = {
         Tab("review", "Review", ("review",),
             (Action("Queue", "queued", "q"), Action("Ignore", "ignored", "warn")),
             "Nothing to review. New watchlist items show up here."),
+        Tab(QUEUE, "Queue", ("queued",), (), "Nothing queued. Queue items from Review.",
+            "queue.html", "partials/queue_rows.html", "partials/queue_row.html"),
         Tab("grabbed", "Grabbed", ("grabbed",), (Action("Undo", "queued"),),
             "Nothing grabbed and waiting. Items move to In library once Plex has them."),
         Tab("library", "In library", ("library",), (Action("Not a match", NOT_A_MATCH),),
@@ -122,7 +127,14 @@ def _filters(type=None, q=None, author=None, show_removed=None, sort=None) -> Fi
     return Filters(type, (q or "").strip(), author or "", show_removed == "1", sort)
 
 
+def _rows_parts(tab: Tab) -> list[str]:
+    return [tab.rows, "partials/json_link.html"]
+
+
 def _item_filter(tab: Tab, f: Filters) -> ItemFilter:
+    if tab.key == QUEUE:  # fixed queue order; shown regardless of in_feed
+        return ItemFilter(tab.statuses, None if f.type == "all" else f.type, f.q or None,
+                          f.author or None, None, "queue")
     in_feed = True if tab.key == "review" and not f.show_removed else None
     return ItemFilter(tab.statuses, None if f.type == "all" else f.type, f.q or None,
                       f.author or None, in_feed, f.sort)
@@ -135,7 +147,7 @@ def _json_href(tab: Tab, f: Filters) -> str:
     if f.type != "all":
         params["type"] = f.type
     params.update({k: v for k, v in (("q", f.q), ("author", f.author)) if v})
-    params["sort"] = f.sort
+    params["sort"] = "queue" if tab.key == QUEUE else f.sort
     return "/api/items?" + urlencode(params)
 
 
@@ -211,8 +223,10 @@ def _row_response(request: Request, tab: Tab, item_id: int, target: str) -> HTML
     except InvalidTransition as exc:
         return _error_fragment(request, 409, str(exc))
     ctx = _context(request, tab, Filters())
-    names = ["partials/row.html"] if item.status in tab.statuses else []
-    return _render([*names, "partials/counts.html"], ctx, row=_rows(store, [item])[0], oob=True)
+    # Queue "Got it" keeps the row on screen, faded, with an Undo button.
+    done = tab.key == QUEUE and item.status == "grabbed"
+    names = [tab.row] if done or item.status in tab.statuses else []
+    return _render([*names, "partials/counts.html"], ctx, row=_rows(store, [item])[0], oob=True, done=done)
 
 
 # ---- routes ----
@@ -248,7 +262,7 @@ def rows_fragment(request: Request, tab_key: str, type: str | None = None, q: st
                   author: str | None = None, show_removed: str | None = None, sort: str | None = None):
     tab = _tab(tab_key)
     f = _filters(type, q, author, show_removed, sort)
-    response = _render(ROWS_PARTS, _list_context(request, tab, f), oob=True)
+    response = _render(_rows_parts(tab), _list_context(request, tab, f), oob=True)
     query = f.query()
     response.headers["HX-Push-Url"] = f"/{tab.key}" + (f"?{query}" if query else "")
     return response
@@ -268,13 +282,28 @@ def bulk(request: Request, status: Annotated[str, Form()], tab: Annotated[str, F
         except (KeyError, InvalidTransition):
             skipped += 1
     ctx = _list_context(request, current, f, skipped=skipped)
-    return _render([*ROWS_PARTS, "partials/counts.html"], ctx, oob=True)
+    return _render([*_rows_parts(current), "partials/counts.html"], ctx, oob=True)
 
 
 @router.post("/fragments/items/{item_id}/status", response_class=HTMLResponse)
 def status_fragment(request: Request, item_id: int, status: Annotated[str, Form()],
                     tab: Annotated[str, Form()]):
     return _row_response(request, _tab(tab), item_id, status)
+
+
+@router.post("/fragments/items/{item_id}/skip", response_class=HTMLResponse)
+def skip_fragment(request: Request, item_id: int, tab: Annotated[str, Form()] = QUEUE,
+                  type: Text = None, q: Text = None, author: Text = None):
+    current = _tab(tab)
+    store = request.app.state.store
+    item = store.get_item(item_id)
+    if item is None:
+        return _error_fragment(request, 404, "That item no longer exists.")
+    if item.status != "queued":
+        return _error_fragment(request, 409, "Only queued items can be skipped.")
+    store.skip(item_id, _now())
+    ctx = _list_context(request, current, _filters(type, q, author))
+    return _render([current.rows], ctx)
 
 
 @router.post("/fragments/items/{item_id}/not-a-match", response_class=HTMLResponse)
@@ -289,4 +318,4 @@ def list_page(request: Request, tab_key: str, type: str | None = None, q: str | 
     tab = _tab(tab_key)
     f = _filters(type, q, author, show_removed, sort)
     status = _header_status(request.app.state.store)
-    return templates.TemplateResponse(request, "list.html", _list_context(request, tab, f, status=status))
+    return templates.TemplateResponse(request, tab.page, _list_context(request, tab, f, status=status))

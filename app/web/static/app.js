@@ -50,7 +50,10 @@
     var el = e.target.closest("[data-copy]");
     if (!el) return;
     e.preventDefault();
-    var text = el.getAttribute("data-copy");
+    copyText(el.getAttribute("data-copy"), el);
+  });
+
+  function copyText(text, el) {
     var done = function () {
       el.classList.add("copied");
       setTimeout(function () { el.classList.remove("copied"); }, 1500);
@@ -60,7 +63,33 @@
     } else if (fallbackCopy(text)) {
       done();
     }
+  }
+
+  // Queue "Copy all as text": fetch the plain list, then copy it like any data-copy box.
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-copy-url]");
+    if (!btn) return;
+    fetch(btn.getAttribute("data-copy-url"))
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error(String(r.status))); })
+      .then(function (text) { copyText(text, btn); })
+      .catch(function () {});
   });
+
+  // Queue session counter: Got it on a row makes it done, Undo takes it back.
+  var sessionDone = 0;
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    var cfg = e.detail.requestConfig, row = cfg && cfg.elt && cfg.elt.closest(".qrow");
+    if (!row || e.detail.target !== row || e.detail.isError) return;
+    var willBeDone = /class="qrow done"/.test(e.detail.serverResponse || "");
+    var change = willBeDone && !row.classList.contains("done") ? 1
+      : !willBeDone && row.classList.contains("done") ? -1 : 0;
+    if (change) { sessionDone = Math.max(0, sessionDone + change); showProgress(); }
+  });
+
+  function showProgress() {
+    var el = document.getElementById("queue-progress");
+    if (el) el.textContent = sessionDone + " of " + el.getAttribute("data-total") + " done this session";
+  }
 
   // Clipboard API needs a secure context; the app is often served over plain http on a LAN.
   function fallbackCopy(text) {

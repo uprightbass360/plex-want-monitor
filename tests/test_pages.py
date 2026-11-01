@@ -150,3 +150,47 @@ def test_refresh_runs_fetch_and_scan(client, store, fetcher, fixture_bytes):
     assert r.status_code == 200 and 'id="header-status"' in r.text
     assert store.last_fetch() is not None and store.last_scan() is not None
     assert "8e18-aaaa-81e5" not in r.text
+
+
+# ---- queue tab ----
+
+
+def _queue_two(store, now):
+    ids = [i.id for i in store.list_items(ItemFilter(statuses=("review",)))][:2]
+    for i in ids: store.set_status(i, "queued", now)
+    return ids
+
+
+def test_queue_page_and_got_it_keeps_faded_row(client, seeded, store, now):
+    ids = [i.id for i in store.list_items(ItemFilter(statuses=("review",)))][:2]
+    for i in ids: store.set_status(i, "queued", now)
+    html = client.get("/queue").text
+    assert "Copy all as text" in html and "Got it" in html and 'data-copy="Battle Beyond the Stars 1980"' in html
+    r = client.post(f"/fragments/items/{ids[0]}/status", data={"status": "grabbed", "tab": "queue"})
+    assert 'class="qrow done"' in r.text and "Undo" in r.text
+    r = client.post(f"/fragments/items/{ids[0]}/status", data={"status": "queued", "tab": "queue"})
+    assert "done" not in r.text and "Got it" in r.text
+
+
+def test_skip_reorders(client, seeded, store, now):
+    ids = [i.id for i in store.list_items(ItemFilter(statuses=("review",)))][:2]
+    for i in ids: store.set_status(i, "queued", now)
+    r = client.post(f"/fragments/items/{ids[0]}/skip", data={"tab": "queue"})
+    assert r.text.index(f'data-item-id="{ids[1]}"') < r.text.index(f'data-item-id="{ids[0]}"')
+
+
+def test_queue_page_header_json_and_no_secrets(client, seeded, store, now):
+    _queue_two(store, now)
+    html = client.get("/queue").text
+    assert 'href="/api/items?status=queued&amp;sort=queue"' in html
+    assert "oldest first" in html and 'id="queue-progress"' in html and 'data-total="2"' in html
+    assert "Put back" in html and "Ignore" in html and "rss.plex.tv" not in html
+    assert 'href="/queue"' in html and 'id="tab-counts"' in html
+
+
+def test_queue_filter_fragment_and_put_back(client, seeded, store, now):
+    ids = _queue_two(store, now)
+    r = client.get("/fragments/queue/rows?type=show")
+    assert "Battle Beyond the Stars" not in r.text
+    r = client.post(f"/fragments/items/{ids[0]}/status", data={"status": "review", "tab": "queue"})
+    assert f'data-item-id="{ids[0]}"' not in r.text and store.get_item(ids[0]).status == "review"

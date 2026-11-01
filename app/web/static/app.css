@@ -169,3 +169,35 @@ select, .search {
   .search { margin-left: 0; width: 100%; }
   .status { margin-left: 0; }
 }
+
+/* ---- queue tab ---- */
+.progress { margin-left: auto; color: var(--text-muted); font-size: 13px; }
+.qrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 320px) auto; gap: 14px;
+  align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line-soft);
+}
+.qrow.done { opacity: .5; }
+.qrow.done .copybox { pointer-events: none; }
+.qinfo .title { white-space: normal; }
+.copybox {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  padding: 7px 10px; border: 1px dashed var(--control); border-radius: 5px;
+  background: var(--panel); color: var(--text); font: inherit; font-size: 13px; text-align: left;
+}
+.copybox:hover { border-color: var(--accent); }
+.copybox .hint-copy, .copybox .hint-copied { color: var(--text-faint); font-size: 11px; }
+.copybox .hint-copied, .copybox.copied .hint-copy { display: none; }
+.copybox.copied .hint-copied { display: inline; color: var(--ok-bg); }
+.btn.copied { border-color: var(--ok-bg); }
+.menu { position: relative; }
+.menu summary { list-style: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu-items {
+  position: absolute; right: 0; z-index: 5; margin-top: 4px; padding: 6px;
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--panel-raised); border: 1px solid var(--control); border-radius: 6px;
+}
+@media (max-width: 760px) {
+  .qrow { grid-template-columns: minmax(0, 1fr); }
+  .progress { margin-left: 0; }
+}
