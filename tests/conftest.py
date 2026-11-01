@@ -236,16 +236,18 @@ class FakeWatchlist:
     def __init__(self):
         self.entries = []
         self.guids = {}
+        self.watchlisted = {}
         self.fail = False
         self.metadata_fail = set()
         self.metadata_calls = []
 
-    def add(self, rating_key, title, year, type_="movie", guids=(), content_rating=None, added_at=None):
+    def add(self, rating_key, title, year, type_="movie", guids=(), content_rating=None, watchlisted_at=None):
         from app.plex_watchlist import WatchlistEntry
 
         self.entries.append(WatchlistEntry(
-            rating_key, f"plex://{type_}/{rating_key}", type_, title, year, added_at, None, content_rating))
+            rating_key, f"plex://{type_}/{rating_key}", type_, title, year, None, content_rating))
         self.guids[rating_key] = tuple(guids)
+        self.watchlisted[rating_key] = watchlisted_at
 
     def remove(self, rating_key):
         self.entries = [e for e in self.entries if e.rating_key != rating_key]
@@ -257,13 +259,14 @@ class FakeWatchlist:
             raise PlexError("watchlist unavailable")
         return list(self.entries)
 
-    def external_guids(self, rating_key):
+    def metadata(self, rating_key):
         from app.plex_client import PlexError
+        from app.plex_watchlist import WatchlistMeta
 
         self.metadata_calls.append(rating_key)
         if self.fail or rating_key in self.metadata_fail:
             raise PlexError("metadata unavailable")
-        return self.guids.get(rating_key, ())
+        return WatchlistMeta(self.guids.get(rating_key, ()), self.watchlisted.get(rating_key))
 
 
 @pytest.fixture

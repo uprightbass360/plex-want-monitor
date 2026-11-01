@@ -144,6 +144,16 @@ def test_ago_filter(now):
     assert ago(now - timedelta(minutes=12), now) == "12 min ago"
     assert ago(now - timedelta(hours=5), now) == "5 h ago"
     assert ago(now - timedelta(days=3), now) == "3 days ago"
+    assert ago(now - timedelta(minutes=1), now) == "1 min ago"
+    assert ago(now - timedelta(hours=1), now) == "1 h ago"
+    assert ago(now - timedelta(days=14), now) == "2 weeks ago"
+    assert ago(now - timedelta(days=100), now) == "3 months ago"
+    assert ago(now - timedelta(days=60), now) == "2 months ago"
+    assert ago(now - timedelta(days=400), now) == "13 months ago"
+    assert ago(now - timedelta(days=690), now) == "23 months ago"
+    assert ago(now - timedelta(days=730), now) == "2 years ago"
+    assert ago(now - timedelta(days=900), now) == "2 years ago"
+    assert ago(now - timedelta(days=365 * 3), now) == "3 years ago"
 
 
 def test_refresh_runs_fetch_and_scan(client, store, fetcher, fixture_bytes):

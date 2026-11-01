@@ -189,8 +189,8 @@ def test_source_transitions_and_source_scoped_leave(store, now):
 def test_watchlist_guid_cache_and_log_source(store, now):
     from app.models import FetchLog
 
-    assert store.get_watchlist_guid("r1") is None
-    store.set_watchlist_guid("r1", "imdb://tt1", now)
-    assert store.get_watchlist_guid("r1") == "imdb://tt1"
+    assert store.get_watchlist_cache("r1") is None
+    store.set_watchlist_guid("r1", "imdb://tt1", now, now)
+    assert store.get_watchlist_cache("r1") == ("imdb://tt1", now)
     store.log_fetch(FetchLog(now, now, True, source="watchlist"))
     assert store.last_fetch() is None and store.last_fetch(source="watchlist").source == "watchlist"

@@ -14,7 +14,7 @@
     </div>
   </div>
   <span><span class="badge {{ row.type }}">{{ "Movie" if row.type == "movie" else "Show" }}</span></span>
-  <span class="muted">{{ row[tab.age_key]|ago(now) }}</span>
+  <span class="muted">{% if tab.age_key == "since" and not row.dated %}seen {% endif %}{{ row[tab.age_key]|ago(now) }}</span>
   <div class="actions">
     {% for action in tab.actions %}
     {% if action.status == "not-a-match" %}

@@ -21,13 +21,18 @@ MAX_PAGES = 100  # safety stop: 10 000 entries
 
 
 @dataclass(frozen=True)
+class WatchlistMeta:
+    guids: tuple[str, ...]
+    watchlisted_at: datetime | None
+
+
+@dataclass(frozen=True)
 class WatchlistEntry:
     rating_key: str
     plex_guid: str
     type: str
     title: str
     year: int | None
-    added_at: datetime | None
     thumb: str | None
     content_rating: str | None = None
 
@@ -64,24 +69,30 @@ class PlexWatchlist:
                 return out
         raise PlexError("watchlist listing is too long to read completely")
 
-    def external_guids(self, rating_key: str) -> tuple[str, ...]:
+    def metadata(self, rating_key: str) -> WatchlistMeta:
         mc = self._get(f"/library/metadata/{quote(rating_key, safe='')}")
         try:
             meta = (mc.get("Metadata") or [{}])[0]
-            return tuple(g["id"] for g in meta.get("Guid") or [])
+            guids = tuple(g["id"] for g in meta.get("Guid") or [])
+            raw = meta.get("watchlistedAt")
         except (KeyError, TypeError, IndexError, AttributeError):
             raise PlexError("watchlist metadata response is incomplete") from None
+        at = None
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw > 0:
+            try:
+                at = datetime.fromtimestamp(int(raw), UTC)
+            except (OverflowError, OSError, ValueError):
+                at = None
+        return WatchlistMeta(guids, at)
 
 
 def _entry(m: dict) -> WatchlistEntry:
-    added = m.get("addedAt")
     return WatchlistEntry(
         rating_key=str(m["ratingKey"]),
         plex_guid=m["guid"],
         type=m["type"] if m.get("type") in ("movie", "show") else "movie",
         title=m["title"],
         year=m.get("year"),
-        added_at=datetime.fromtimestamp(int(added), UTC) if added else None,
         thumb=m.get("thumb") or None,
         content_rating=m.get("contentRating") or None,
     )
@@ -113,13 +124,17 @@ def run_watchlist_sync(store, auth, now: datetime) -> FetchLog:
         feed_items: list[FeedItem] = []
         owner = auth.owner_uuid()
         for e in entries:
-            guid = store.get_watchlist_guid(e.rating_key)
-            if guid is None:
-                guid = _first_external(client.external_guids(e.rating_key)) or e.plex_guid
-                store.set_watchlist_guid(e.rating_key, guid, now)
+            cached = store.get_watchlist_cache(e.rating_key)
+            if cached is None or cached[1] is None:  # unknown timestamp: re-fetch (backfills old caches)
+                meta = client.metadata(e.rating_key)
+                guid = _first_external(meta.guids) or e.plex_guid
+                watchlisted_at = meta.watchlisted_at
+                store.set_watchlist_guid(e.rating_key, guid, watchlisted_at, now)
+            else:
+                guid, watchlisted_at = cached
             feed_items.append(FeedItem(
                 guid=guid, type=e.type, raw_title=e.title, title=e.title, year=e.year, link=None,
-                thumb=e.thumb, keywords=(), rating=e.content_rating, pub_date=e.added_at, author_hash=owner,
+                thumb=e.thumb, keywords=(), rating=e.content_rating, pub_date=watchlisted_at, author_hash=owner,
             ))
         new, _ = store.upsert_feed_items(feed_items, now, source="watchlist")
         if feed_items:  # an empty listing is more likely a hiccup than a cleared watchlist

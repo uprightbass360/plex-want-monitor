@@ -43,11 +43,11 @@ def test_items_paginates_and_keeps_token_in_header_only():
     first = items[0]
     assert first == WatchlistEntry(
         "aaaaaaaaaaaaaaaaaaaa0001", "plex://movie/aaaaaaaaaaaaaaaaaaaa0001", "movie", "Fake Movie One", 2001,
-        datetime.fromtimestamp(1760000000, UTC), "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001.jpg", "PG")
+        "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001.jpg", "PG")
     assert items[1].type == "show"
 
 
-def test_external_guids_from_metadata_call():
+def test_metadata_call():
     body = (FIX / "watchlist_metadata.json").read_bytes()
     seen = []
 
@@ -55,8 +55,9 @@ def test_external_guids_from_metadata_call():
         seen.append(request)
         return httpx.Response(200, content=body, headers={"Content-Type": "application/json"})
 
-    guids = _client(handler).external_guids("aaaaaaaaaaaaaaaaaaaa0001")
-    assert guids == ("imdb://tt0000001", "tmdb://1001", "tvdb://2001")
+    meta = _client(handler).metadata("aaaaaaaaaaaaaaaaaaaa0001")
+    assert meta.guids == ("imdb://tt0000001", "tmdb://1001", "tvdb://2001")
+    assert meta.watchlisted_at == datetime.fromtimestamp(1790822208, UTC)
     r = seen[0]
     assert r.url.path == "/library/metadata/aaaaaaaaaaaaaaaaaaaa0001" and r.headers["X-Plex-Token"] == TOKEN
     assert TOKEN not in str(r.url)
@@ -71,7 +72,7 @@ def test_errors_are_plexerror_without_token():
     def boom(request):
         raise httpx.ConnectError(f"failed {request.url} {TOKEN}")
 
-    for call in (lambda c: c.items(), lambda c: c.external_guids("x")):
+    for call in (lambda c: c.items(), lambda c: c.metadata("x")):
         with pytest.raises(PlexError) as e:
             call(_client(boom))
         assert TOKEN not in str(e.value)
@@ -88,8 +89,8 @@ AT = datetime(2026, 10, 30, tzinfo=UTC)
 
 def _owned(fake_watchlist, signed_in_auth):
     fake_watchlist.add("rk1", "Fake Movie One", 2001, "movie", ["imdb://tt0000001", "tmdb://1"],
-                       content_rating="PG", added_at=AT)
-    fake_watchlist.add("rk2", "Fake Show Two", 2012, "show", ["tvdb://2"], added_at=AT)
+                       content_rating="PG", watchlisted_at=AT)
+    fake_watchlist.add("rk2", "Fake Show Two", 2012, "show", ["tvdb://2"], watchlisted_at=AT)
     return signed_in_auth
 
 
@@ -233,7 +234,7 @@ def test_watchlist_sync_keeps_feed_metadata_on_both_rows(seeded, signed_in_auth,
     store = seeded
     before = store.get_item_by_guid("imdb://tt11280740")
     assert before.link
-    fake_watchlist.add("rk3", "Severance", 2022, "show", ["imdb://tt11280740"], content_rating="X", added_at=AT)
+    fake_watchlist.add("rk3", "Severance", 2022, "show", ["imdb://tt11280740"], content_rating="X", watchlisted_at=AT)
     run_watchlist_sync(store, signed_in_auth, now)
     after = store.get_item_by_guid("imdb://tt11280740")
     assert after.source == "both"
@@ -258,3 +259,51 @@ def test_exhausted_page_loop_is_an_error(monkeypatch):
     c = _client(lambda r: _page(entry, 50, int(r.url.params["X-Plex-Container-Start"])))
     with pytest.raises(PlexError):
         c.items()
+
+
+@pytest.mark.parametrize("raw", [None, "soon", 0, -5, True, 10**30])
+def test_metadata_missing_or_invalid_watchlisted_at_is_none(raw):
+    meta = {"Guid": [{"id": "imdb://tt1"}]}
+    if raw is not None:
+        meta["watchlistedAt"] = raw
+    c = _client(lambda r: httpx.Response(200, json={"MediaContainer": {"Metadata": [meta]}}))
+    m = c.metadata("x")
+    assert m.watchlisted_at is None and m.guids == ("imdb://tt1",)
+
+
+def test_listing_added_at_is_never_a_watchlist_date():
+    assert not hasattr(WatchlistEntry, "added_at") and "added_at" not in WatchlistEntry.__dataclass_fields__
+
+
+def test_sync_keeps_pub_date_across_second_sync(store, signed_in_auth, fake_watchlist, now):
+    _owned(fake_watchlist, signed_in_auth)
+    run_watchlist_sync(store, signed_in_auth, now)
+    run_watchlist_sync(store, signed_in_auth, now)
+    assert store.get_item_by_guid("imdb://tt0000001").pub_date == AT
+    assert sorted(fake_watchlist.metadata_calls) == ["rk1", "rk2"]
+
+
+def test_sync_without_timestamp_has_no_pub_date_and_review_shows_seen(
+        store, signed_in_auth, fake_watchlist, now, client):
+    fake_watchlist.add("rk9", "Undated", 2020, "movie", ["imdb://tt9"])
+    run_watchlist_sync(store, signed_in_auth, now)
+    assert store.get_item_by_guid("imdb://tt9").pub_date is None
+    assert "seen just now" in client.get("/review").text
+
+
+def test_old_cache_without_timestamp_is_refetched_and_backfilled(store, signed_in_auth, fake_watchlist, now):
+    fake_watchlist.add("rk1", "Fake Movie One", 2001, "movie", ["imdb://tt0000001"], watchlisted_at=AT)
+    store.set_watchlist_guid("rk1", "imdb://tt0000001", None, now)
+    run_watchlist_sync(store, signed_in_auth, now)
+    assert fake_watchlist.metadata_calls == ["rk1"]
+    assert store.get_watchlist_cache("rk1") == ("imdb://tt0000001", AT)
+    assert store.get_item_by_guid("imdb://tt0000001").pub_date == AT
+
+
+def test_sorts_fall_back_to_first_seen_for_undated_rows(store, signed_in_auth, fake_watchlist, now):
+    from datetime import timedelta
+    fake_watchlist.add("rkA", "Undated", 2020, "movie", ["imdb://tt9"])
+    fake_watchlist.add("rkB", "Old", 2020, "movie", ["imdb://tt8"], watchlisted_at=now - timedelta(days=30))
+    run_watchlist_sync(store, signed_in_auth, now)  # Undated first_seen == now: newer than Old
+    assert [i.title for i in store.list_items(ItemFilter(statuses=None, sort="newest"))] == ["Undated", "Old"]
+    assert [i.title for i in store.list_items(ItemFilter(statuses=None, sort="oldest"))] == ["Old", "Undated"]

@@ -80,13 +80,16 @@ def ago(dt: datetime | None, now: datetime) -> str:
         return f"{mins} min ago"
     hours = mins // 60
     if hours < 48:
-        return f"{hours} h ago"
+        return "1 h ago" if hours == 1 else f"{hours} h ago"
     days = hours // 24
     if days < 14:
         return f"{days} days ago"
     if days < 60:
         return f"{days // 7} weeks ago"
-    return f"{days // 30} months ago"
+    months = days // 30
+    if months < 24:
+        return f"{months} months ago"
+    return f"{months // 12} years ago"
 
 
 templates.env.filters["ago"] = ago
@@ -188,6 +191,7 @@ def _rows(store, items) -> list[dict]:
         {
             **item_to_dict(i, authors.get(i.id, [])),
             "since": i.pub_date or i.first_seen,
+            "dated": i.pub_date is not None,
             "changed_at": i.status_changed_at,
             "matched_dt": i.matched_at,
             "not_rescanned": _not_rescanned(i, scan, selected),

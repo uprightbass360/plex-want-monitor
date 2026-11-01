@@ -13,8 +13,8 @@ from app.models import (
 )
 
 _ORDER = {
-    "newest": "pub_date DESC, first_seen DESC",
-    "oldest": "pub_date ASC, first_seen ASC",
+    "newest": "COALESCE(pub_date, first_seen) DESC, first_seen DESC",
+    "oldest": "COALESCE(pub_date, first_seen) ASC, first_seen ASC",
     "title": "title COLLATE NOCASE",
     "queue": "queue_order ASC NULLS LAST, first_seen ASC",
 }
@@ -128,15 +128,17 @@ class Store:
                     )
         return len(gone)
 
-    def get_watchlist_guid(self, rating_key: str) -> str | None:
-        r = self.conn.execute("SELECT guid FROM watchlist_guids WHERE rating_key=?", (rating_key,)).fetchone()
-        return r["guid"] if r else None
+    def get_watchlist_cache(self, rating_key: str) -> tuple[str, datetime | None] | None:
+        r = self.conn.execute(
+            "SELECT guid, watchlisted_at FROM watchlist_guids WHERE rating_key=?", (rating_key,)).fetchone()
+        return (r["guid"], from_iso(r["watchlisted_at"])) if r else None
 
-    def set_watchlist_guid(self, rating_key: str, guid: str, now: datetime) -> None:
+    def set_watchlist_guid(self, rating_key: str, guid: str, watchlisted_at: datetime | None, now: datetime) -> None:
         self.conn.execute(
-            "INSERT INTO watchlist_guids (rating_key, guid, fetched_at) VALUES (?,?,?)"
-            " ON CONFLICT(rating_key) DO UPDATE SET guid=excluded.guid, fetched_at=excluded.fetched_at",
-            (rating_key, guid, to_iso(now)),
+            "INSERT INTO watchlist_guids (rating_key, guid, watchlisted_at, fetched_at) VALUES (?,?,?,?)"
+            " ON CONFLICT(rating_key) DO UPDATE SET guid=excluded.guid,"
+            " watchlisted_at=excluded.watchlisted_at, fetched_at=excluded.fetched_at",
+            (rating_key, guid, to_iso(watchlisted_at), to_iso(now)),
         )
 
     def get_item(self, item_id: int) -> Item | None:

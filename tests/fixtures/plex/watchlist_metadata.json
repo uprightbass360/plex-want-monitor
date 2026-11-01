@@ -9,6 +9,7 @@
         "title": "Fake Movie One",
         "year": 2001,
         "addedAt": 1760000000,
+        "watchlistedAt": 1790822208,
         "thumb": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001.jpg",
         "art": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001-art.jpg",
         "contentRating": "PG",
