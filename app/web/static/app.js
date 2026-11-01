@@ -115,6 +115,19 @@
     return ok;
   }
 
+  // Sortable headings: switch direction if the column is active, else start ascending,
+  // then let the form's hx-get on change re-fetch the rows (and the re-rendered head row).
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".sort-head");
+    if (!btn) return;
+    var form = document.getElementById("filters");
+    var input = form && form.querySelector('input[name="sort"]');
+    if (!input) return;
+    var asc = btn.getAttribute("data-sort-asc"), desc = btn.getAttribute("data-sort-desc");
+    input.value = input.value === asc ? desc : asc;
+    form.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
   // Rows are replaced by htmx swaps: recompute selection and fade out old flash messages.
   document.addEventListener("htmx:afterSettle", function (e) {
     syncSelection();

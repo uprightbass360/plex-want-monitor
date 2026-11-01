@@ -194,3 +194,26 @@ def test_watchlist_guid_cache_and_log_source(store, now):
     assert store.get_watchlist_cache("r1") == ("imdb://tt1", now)
     store.log_fetch(FetchLog(now, now, True, source="watchlist"))
     assert store.last_fetch() is None and store.last_fetch(source="watchlist").source == "watchlist"
+
+
+def test_title_desc_and_type_sorts(store, feed_items, now):
+    store.upsert_feed_items(feed_items, now)
+    asc = [i.title.lower() for i in store.list_items(ItemFilter(sort="title"))]
+    assert [i.title.lower() for i in store.list_items(ItemFilter(sort="title_desc"))] == asc[::-1]
+    t = [(i.type, i.title.lower()) for i in store.list_items(ItemFilter(sort="type"))]
+    assert t == sorted(t)
+    td = [(i.type, i.title.lower()) for i in store.list_items(ItemFilter(sort="type_desc"))]
+    assert [x[0] for x in td] == sorted((x[0] for x in td), reverse=True)
+    assert all(a[1] <= b[1] for a, b in zip(td, td[1:]) if a[0] == b[0])
+
+
+def test_count_by_author_statuses_in_feed_only(store, feed_items, now):
+    store.upsert_feed_items(feed_items, now)
+    assert store.count_by_author(ItemFilter(statuses=("review",))) == {"friend-a": 3, "friend-b": 2}
+    item = store.get_item_by_guid("imdb://tt0080421")
+    store.set_status(item.id, "queued", now)
+    got = store.count_by_author(ItemFilter(statuses=("queued",), type="show", q="zzz", author="nobody"))
+    assert sum(got.values()) == 1
+    store.mark_left_feed({"imdb://tt0080421"}, now)
+    assert store.count_by_author(ItemFilter(statuses=("review",), in_feed=True)) == {}
+    assert sum(store.count_by_author(ItemFilter(statuses=("review",), in_feed=False)).values()) == 4

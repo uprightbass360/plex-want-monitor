@@ -9,13 +9,7 @@
     {% endfor %}
   </div>
   {% include "partials/author_select.html" %}
-  <label class="field">Sort
-    <select name="sort">
-      {% for value, label in (("newest", "newest first"), ("oldest", "oldest first"), ("title", "title")) %}
-      <option value="{{ value }}"{% if f.sort == value %} selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </label>
+  <input type="hidden" name="sort" value="{{ f.sort }}">
   {% if tab.key == "review" %}
   <label class="field"><input type="checkbox" name="show_removed" value="1"{% if f.show_removed %} checked{% endif %}> show removed</label>
   {% endif %}
@@ -28,10 +22,6 @@
 </form>
 {% include "partials/bulk_bar.html" %}
 <section class="list">
-  <div class="row head">
-    <input type="checkbox" id="check-all" aria-label="Select all">
-    <span></span><span>Title</span><span>Type</span><span>{{ tab.age_label }}</span><span>Actions</span>
-  </div>
   <div id="rows" hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="wm-refreshed from:body" hx-include="#filters">
     {% include "partials/rows.html" %}
   </div>

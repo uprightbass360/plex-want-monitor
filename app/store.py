@@ -16,6 +16,9 @@ _ORDER = {
     "newest": "COALESCE(pub_date, first_seen) DESC, first_seen DESC",
     "oldest": "COALESCE(pub_date, first_seen) ASC, first_seen ASC",
     "title": "title COLLATE NOCASE",
+    "title_desc": "title COLLATE NOCASE DESC",
+    "type": "type ASC, title COLLATE NOCASE",
+    "type_desc": "type DESC, title COLLATE NOCASE",
     "queue": "queue_order ASC NULLS LAST, first_seen ASC",
 }
 
@@ -176,6 +179,21 @@ class Store:
             sql += " WHERE " + " AND ".join(where)
         sql += f" ORDER BY {order}, id"
         return [Item.from_row(r) for r in self.conn.execute(sql, params)]
+
+    def count_by_author(self, f: ItemFilter) -> dict[str, int]:
+        """Items per author hash matching the filter's statuses and in_feed only."""
+        where, params = [], []
+        if f.statuses:
+            where.append(f"i.status IN ({','.join('?' * len(f.statuses))})")
+            params += list(f.statuses)
+        if f.in_feed is not None:
+            where.append("i.in_feed=?")
+            params.append(int(f.in_feed))
+        sql = "SELECT ia.author_hash AS h, COUNT(*) AS n FROM item_authors ia JOIN items i ON i.id=ia.item_id"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " GROUP BY ia.author_hash"
+        return {r["h"]: r["n"] for r in self.conn.execute(sql, params)}
 
     def counts_by_status(self) -> dict[str, int]:
         rows = self.conn.execute("SELECT status, COUNT(*) AS n FROM items GROUP BY status")

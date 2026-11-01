@@ -133,7 +133,7 @@ def test_header_status_shows_ages_truncation_and_error(client, store, now, monke
     store.log_fetch(FetchLog(start, start, False, error="boom 500", truncated=True))
     html = client.get("/fragments/header-status").text
     assert "boom 500" in html and "truncated" in html.lower()
-    assert "feed 4 min ago" in html and "scan never" in html
+    assert "feed 4 min ago" in html and "scan never" in html and html.count("updated") == 1
 
 
 def test_ago_filter(now):
@@ -430,7 +430,7 @@ def test_grabbed_row_text_header_and_scan_now(client, seeded, store, now, monkey
     store.set_status(item.id, "queued", now); store.set_status(item.id, "grabbed", now)
     html = client.get("/grabbed").text
     assert "grabbed 3 days ago, not yet seen by Plex" in html
-    assert "<span>Grabbed</span>" in html and "On watchlist since" not in html
+    assert "Grabbed <span" in html and "On watchlist since" not in html
     assert 'hx-post="/fragments/scan"' in html
     assert "On watchlist since" in client.get("/review").text
 
@@ -571,7 +571,9 @@ def test_person_select_on_review_and_queue(client, seeded):
         body = _author_select(client.get(path).text)
         opts = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', body)
         assert opts[0] == ("", "Everyone")
-        counts = {h: c for h, c in ((a.hash, a.item_count) for a in seeded.list_authors())}
+        status = ("queued",) if path == "/queue" else ("review",)
+        counts = seeded.count_by_author(ItemFilter(statuses=status, in_feed=True if status == ("review",) else None))
+        counts = {a.hash: counts.get(a.hash, 0) for a in seeded.list_authors()}
         names = {a.hash: a.name for a in seeded.list_authors()}
         assert {v for v, _ in opts[1:]} == set(counts)
         for v, text in opts[1:]:
@@ -593,3 +595,51 @@ def test_person_filter_selected_rows_and_json_link(client, seeded):
     assert ids_b and ids_b < all_titles
     for t in ids_b: assert t in rows.text
     for t in all_titles - ids_b: assert t not in rows.text
+
+
+def test_no_sort_select_and_head_buttons_default(client, seeded):
+    html = client.get("/review").text
+    assert '<select name="sort"' not in html and 'type="hidden" name="sort" value="newest"' in html
+    assert 'data-sort-asc="title" data-sort-desc="title_desc" aria-sort="none"' in html
+    assert 'data-sort-asc="type" data-sort-desc="type_desc" aria-sort="none"' in html
+    assert 'data-sort-asc="oldest" data-sort-desc="newest" aria-sort="descending"' in html
+
+
+def test_head_buttons_reflect_title_desc(client, seeded):
+    html = client.get("/review?sort=title_desc").text
+    assert 'data-sort-asc="title" data-sort-desc="title_desc" aria-sort="descending"' in html
+    assert 'data-sort-asc="oldest" data-sort-desc="newest" aria-sort="none"' in html
+    assert 'name="sort" value="title_desc"' in html
+
+
+def test_rows_fragment_has_head_and_honours_type_sort(client, seeded):
+    r = client.get("/fragments/review/rows?sort=type")
+    assert r.status_code == 200 and 'id="check-all"' in r.text
+    assert 'data-sort-asc="type" data-sort-desc="type_desc" aria-sort="ascending"' in r.text
+    assert client.get("/fragments/review/rows?sort=bogus").status_code == 422
+
+
+def test_queue_has_no_sort_controls(client, seeded):
+    html = client.get("/queue").text
+    assert "sort-head" not in html and 'name="sort"' not in html
+
+
+def test_author_counts_per_tab(client, seeded, store, now):
+    item = store.list_items(ItemFilter(statuses=("review",), in_feed=True))
+    mine = next(i for i in item if any(a.hash == "friend-a" for a in store.authors_for([i.id])[i.id]))
+    store.set_status(mine.id, "queued", now)
+    q = _author_select(client.get("/queue").text)
+    assert re.search(r"friend-a[^<]*\(1\)", q) and re.search(r"friend-b[^<]*\(0\)", q)
+    r = _author_select(client.get("/review").text)
+    assert re.search(r"friend-a[^<]*\(2\)", r) and re.search(r"friend-b[^<]*\(2\)", r)
+
+
+def test_header_single_updated_with_tooltip(client, store, now, monkeypatch):
+    monkeypatch.setattr("app.web.pages._now", lambda: now)
+    t = now - timedelta(minutes=7)
+    store.log_fetch(FetchLog(t, t, True))
+    store.log_fetch(FetchLog(t, now - timedelta(minutes=2), True, source="watchlist"))
+    html = client.get("/fragments/header-status").text
+    assert html.count("updated") == 1 and "updated 2 min ago" in html
+    assert 'title="feed 7 min ago · watchlist 2 min ago · scan never"' in html
+    assert "<span>scan" not in html

@@ -1,8 +1,8 @@
 <label class="field">
   <select name="author" aria-label="Filter by person">
     <option value="">Everyone</option>
-    {% for a in author_options %}
-    <option value="{{ a.hash }}"{% if f.author == a.hash %} selected{% endif %}>{{ a.name }} ({{ a.item_count }})</option>
+    {% for a, n in author_options %}
+    <option value="{{ a.hash }}"{% if f.author == a.hash %} selected{% endif %}>{{ a.name }} ({{ n }})</option>
     {% endfor %}
   </select>
 </label>

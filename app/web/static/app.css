@@ -133,6 +133,13 @@ select, .search {
   padding: 6px 18px; font-size: 11px; letter-spacing: .6px;
   text-transform: uppercase; color: var(--text-faint);
 }
+.sort-head {
+  all: unset; cursor: pointer; text-transform: inherit; letter-spacing: inherit;
+  font: inherit; color: inherit;
+}
+.sort-head:hover, .sort-head[aria-sort="ascending"], .sort-head[aria-sort="descending"] { color: var(--text); }
+.sort-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sort-head .arrow { font-size: 9px; }
 .row.gone { opacity: .6; }
 .row:has(.row-check:checked) { background: #1a1d24; }
 .row-check, #check-all { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }

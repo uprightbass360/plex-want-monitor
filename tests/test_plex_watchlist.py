@@ -288,7 +288,8 @@ def test_sync_keeps_pub_date_across_second_sync(store, signed_in_auth, fake_watc
 
 
 def test_sync_without_timestamp_has_no_pub_date_and_review_shows_seen(
-        store, signed_in_auth, fake_watchlist, now, client):
+        store, signed_in_auth, fake_watchlist, now, client, monkeypatch):
+    monkeypatch.setattr("app.web.pages._now", lambda: now)
     fake_watchlist.add("rk9", "Undated", 2020, "movie", ["imdb://tt9"])
     run_watchlist_sync(store, signed_in_auth, now)
     assert store.get_item_by_guid("imdb://tt9").pub_date is None

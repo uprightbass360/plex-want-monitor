@@ -21,7 +21,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 NOT_A_MATCH = "not-a-match"
-LIST_SORTS = ("newest", "oldest", "title")
+LIST_SORTS = ("newest", "oldest", "title", "title_desc", "type", "type_desc")
 QUEUE = "queue"
 
 
@@ -203,7 +203,16 @@ def _rows(store, items) -> list[dict]:
 def _header_status(store) -> dict:
     fetch, scan, wl = store.last_fetch(), store.last_scan(), store.last_fetch(source="watchlist")
     errors = [log.error for log in (fetch, wl, scan) if log and not log.ok and log.error]
+    times = {"feed": fetch, "watchlist": wl, "scan": scan}
+    stamps = [log.finished_at for log in times.values() if log and log.finished_at]
+    now = _now()
+    detail = " · ".join(
+        f"{name} {ago(log.finished_at if log else None, now)}"
+        for name, log in times.items() if name != "watchlist" or wl
+    )
     return {
+        "updated_at": max(stamps) if stamps else None,
+        "detail": detail,
         "fetched_at": fetch.finished_at if fetch else None,
         "watchlisted_at": wl.finished_at if wl else None,
         "scanned_at": scan.finished_at if scan else None,
@@ -215,12 +224,15 @@ def _header_status(store) -> dict:
 def _context(request: Request, tab: Tab, f: Filters, **extra) -> dict:
     store = request.app.state.store
     people = store.list_authors()
+    by_tab = store.count_by_author(_item_filter(tab, f))
     return {
         "tab": tab, "tabs": TABS, "f": f, "now": _now(),
         "counts": _counts(store),
         "json_href": _json_href(tab, f),
         "authors": {a.hash: a.name for a in people},
-        "author_options": sorted(people, key=lambda a: a.name.casefold()),
+        "author_options": [
+            (a, by_tab.get(a.hash, 0)) for a in sorted(people, key=lambda a: a.name.casefold())
+        ],
         **extra,
     }
 
