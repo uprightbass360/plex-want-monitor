@@ -77,7 +77,7 @@ def _get_json(http: httpx.Client, method: str, url: str, headers: dict, timeout:
         r = http.request(method, url, headers=headers, timeout=timeout)
     except httpx.HTTPError as e:  # never echo e: it may carry the URL
         raise PlexError(f"could not reach {host}: {type(e).__name__}") from None
-    if r.status_code != 200:
+    if r.status_code not in (200, 201):  # plex.tv answers 201 to POST /pins
         raise PlexError(f"{host} answered HTTP {r.status_code}")
     try:
         return json.loads(r.content.decode("utf-8", errors="replace"))

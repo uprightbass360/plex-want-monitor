@@ -21,7 +21,7 @@ dev = ["pytest", "pytest-asyncio"]
 packages = ["app", "app.web"]
 
 [tool.setuptools.package-data]
-"app.web" = ["templates/*", "static/*"]
+"app.web" = ["templates/*", "templates/*/*", "static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

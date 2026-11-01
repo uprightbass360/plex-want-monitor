@@ -1,0 +1,8 @@
+services:
+  want-monitor:
+    build: .
+    ports: ["8787:8787"]
+    volumes: ["./data:/data"]
+    restart: unless-stopped
+    environment:
+      - TZ=America/New_York
