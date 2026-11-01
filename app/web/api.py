@@ -10,8 +10,7 @@ from pydantic import BaseModel, Field
 from app.lifecycle import STATUSES, InvalidTransition, apply_not_a_match, apply_owner_transition
 from app.models import SORTS, ItemFilter, item_to_dict
 from app.plex_client import PlexError
-from app.poller import DEFAULT_CAP_THRESHOLD
-from app.scheduler import DEFAULT_FEED_INTERVAL_MIN, DEFAULT_SCAN_INTERVAL_MIN
+from app.web.settings_shared import CAP_MAX, CAP_MIN, DEFAULTS, INTERVAL_MAX, INTERVAL_MIN, mask_feed_url
 
 router = APIRouter()
 
@@ -169,11 +168,7 @@ def not_a_match(request: Request, item_id: int):
 
 # ---- settings ----
 
-_DEFAULTS = {
-    "feed_interval_min": DEFAULT_FEED_INTERVAL_MIN,
-    "scan_interval_min": DEFAULT_SCAN_INTERVAL_MIN,
-    "feed_cap_threshold": DEFAULT_CAP_THRESHOLD,
-}
+_DEFAULTS = DEFAULTS
 
 
 class Friend(BaseModel):
@@ -183,9 +178,9 @@ class Friend(BaseModel):
 
 class SettingsBody(BaseModel):
     feed_url: str | None = None
-    feed_interval_min: int | None = Field(None, ge=1, le=1440)
-    scan_interval_min: int | None = Field(None, ge=1, le=1440)
-    feed_cap_threshold: int | None = Field(None, ge=1, le=500)
+    feed_interval_min: int | None = Field(None, ge=INTERVAL_MIN, le=INTERVAL_MAX)
+    scan_interval_min: int | None = Field(None, ge=INTERVAL_MIN, le=INTERVAL_MAX)
+    feed_cap_threshold: int | None = Field(None, ge=CAP_MIN, le=CAP_MAX)
     selected_library_keys: list[str] | None = None
     friends: list[Friend] | None = None
 
@@ -193,7 +188,7 @@ class SettingsBody(BaseModel):
 def _settings_view(store) -> dict:
     url = store.get_setting("feed_url")
     return {
-        "feed_url_masked": "\u2026" + url[-4:] if url else None,
+        "feed_url_masked": mask_feed_url(url),
         **{k: store.get_setting(k, d) for k, d in _DEFAULTS.items()},
         "selected_library_keys": store.get_setting("selected_library_keys", []),
         "friends": [

@@ -75,6 +75,15 @@
       .catch(function () {});
   });
 
+  // Settings cards come back as 422/502 with the re-rendered card; swap those (and only those).
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    var xhr = e.detail.xhr;
+    if (xhr && (xhr.status === 422 || xhr.status === 502) && xhr.getResponseHeader("X-WM-Card")) {
+      e.detail.shouldSwap = true;
+      e.detail.isError = false;
+    }
+  });
+
   // Queue session counter: Got it on a row makes it done, Undo takes it back.
   var sessionDone = 0;
   document.addEventListener("htmx:beforeSwap", function (e) {

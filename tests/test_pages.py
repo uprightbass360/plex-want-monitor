@@ -302,3 +302,12 @@ def test_scan_now_shows_summary(connected_client, store):
 def test_friends_row_escapes_label(client, seeded):
     r = client.post("/fragments/settings/friends", data={"hash": "friend-a", "label": "<b>x</b>"})
     assert "<b>x</b>" not in r.text and "&lt;b&gt;" in r.text
+
+
+def test_settings_error_cards_carry_swap_header_and_base_config_unchanged(client, connected_client):
+    r = client.post("/fragments/settings/feed", data={"feed_interval_min": "0", "feed_cap_threshold": "25"})
+    assert r.status_code == 422 and r.headers["X-WM-Card"] == "1"
+    r = connected_client.post("/fragments/settings/scan", data={"scan_interval_min": "0"})
+    assert r.status_code == 422 and r.headers["X-WM-Card"] == "1"
+    assert "X-WM-Card" not in client.post("/fragments/settings/feed", data={"feed_interval_min": "5", "feed_cap_threshold": "25"}).headers
+    assert "422" not in client.get("/review").text.split("htmx-config")[1].split(">")[0]

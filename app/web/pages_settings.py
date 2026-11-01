@@ -9,27 +9,20 @@ from fastapi.responses import HTMLResponse
 
 from app.feed import parse_feed
 from app.plex_client import PlexError
-from app.poller import DEFAULT_CAP_THRESHOLD
-from app.scheduler import DEFAULT_FEED_INTERVAL_MIN, DEFAULT_SCAN_INTERVAL_MIN
+from app.web.settings_shared import DEFAULTS, mask_feed_url, parse_setting_int, range_error
 from app.web.pages import TABS, _counts, _header_status, _now, templates
 
 router = APIRouter()
 
 Text = Annotated[str | None, Form()]
-INTERVAL_ERROR = "must be a whole number between 1 and 1440"
-CAP_ERROR = "must be a whole number between 1 and 500"
-
-
-def _int_in(value: str | None, low: int, high: int) -> int | None:
-    try:
-        n = int((value or "").strip())
-    except ValueError:
-        return None
-    return n if low <= n <= high else None
+CARD_HEADER = {"X-WM-Card": "1"}  # tells app.js to swap this 422/502 card response
 
 
 def _card(request: Request, name: str, ctx: dict, code: int = 200) -> HTMLResponse:
-    return templates.TemplateResponse(request, f"partials/{name}.html", ctx, status_code=code)
+    response = templates.TemplateResponse(request, f"partials/{name}.html", ctx, status_code=code)
+    if code >= 400:
+        response.headers.update(CARD_HEADER)
+    return response
 
 
 # ---- feed card ----
@@ -40,8 +33,8 @@ def _feed_ctx(request: Request, **extra) -> dict:
     url = store.get_setting("feed_url")
     return {
         "masked": "…" + url[-4:] if url else None,
-        "interval": store.get_setting("feed_interval_min", DEFAULT_FEED_INTERVAL_MIN),
-        "cap": store.get_setting("feed_cap_threshold", DEFAULT_CAP_THRESHOLD),
+        "interval": store.get_setting("feed_interval_min", DEFAULTS["feed_interval_min"]),
+        "cap": store.get_setting("feed_cap_threshold", DEFAULTS["feed_cap_threshold"]),
         "fetch": store.last_fetch(),
         "now": _now(),
         "note": None, "error": None, "test": None,
@@ -53,10 +46,10 @@ def _feed_ctx(request: Request, **extra) -> dict:
 def save_feed(request: Request, feed_url: Text = None, feed_interval_min: Text = None,
               feed_cap_threshold: Text = None):
     store = request.app.state.store
-    interval = _int_in(feed_interval_min, 1, 1440)
-    cap = _int_in(feed_cap_threshold, 1, 500)
+    interval = parse_setting_int("feed_interval_min", feed_interval_min)
+    cap = parse_setting_int("feed_cap_threshold", feed_cap_threshold)
     if interval is None or cap is None:
-        error = f"Poll interval {INTERVAL_ERROR}." if interval is None else f"Cap threshold {CAP_ERROR}."
+        error = range_error("Poll interval", "feed_interval_min") if interval is None else range_error("Cap threshold", "feed_cap_threshold")
         shown = {"interval": feed_interval_min, "cap": feed_cap_threshold}
         return _card(request, "feed_card", _feed_ctx(request, error=error, **shown), 422)
     url = (feed_url or "").strip()
@@ -126,7 +119,7 @@ def _plex_ctx(request: Request, *, expired: bool = False, note: str | None = Non
             ctx["error"] = ctx["error"] or str(exc)
         ctx["scan"] = store.last_scan()
         if ctx["scan_interval"] is None:
-            ctx["scan_interval"] = store.get_setting("scan_interval_min", DEFAULT_SCAN_INTERVAL_MIN)
+            ctx["scan_interval"] = store.get_setting("scan_interval_min", DEFAULTS["scan_interval_min"])
     state = ("connected" if status["server"] else "pick") if status["signed_in"] else (
         "pending" if status["pending_pin"] else "expired" if expired else "connect")
     return {**ctx, "plex": status, "state": state}
@@ -183,9 +176,9 @@ def save_libraries(request: Request, library_keys: Annotated[list[str] | None, F
 
 @router.post("/fragments/settings/scan", response_class=HTMLResponse)
 def save_scan_interval(request: Request, scan_interval_min: Text = None):
-    interval = _int_in(scan_interval_min, 1, 1440)
+    interval = parse_setting_int("scan_interval_min", scan_interval_min)
     if interval is None:
-        return _plex(request, 422, error=f"Scan interval {INTERVAL_ERROR}.", scan_interval=scan_interval_min)
+        return _plex(request, 422, error=range_error("Scan interval", "scan_interval_min"), scan_interval=scan_interval_min)
     request.app.state.store.set_setting("scan_interval_min", interval)
     return _plex(request, note="Saved")
 
