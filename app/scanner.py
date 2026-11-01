@@ -51,7 +51,7 @@ def _scan(store: Store, auth: PlexAuth, now: datetime) -> ScanLog:
 
     index = build_index(listings)
     matched = reverted = 0
-    for item in store.list_items(ItemFilter()):
+    for item in store.list_items(ItemFilter(monitored_only=False)):
         if item.status != "library":
             m = find_match(item.type, item.guid, item.title, item.year, index, item.rejected_rating_keys)
             if m:
