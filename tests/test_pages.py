@@ -311,3 +311,18 @@ def test_settings_error_cards_carry_swap_header_and_base_config_unchanged(client
     assert r.status_code == 422 and r.headers["X-WM-Card"] == "1"
     assert "X-WM-Card" not in client.post("/fragments/settings/feed", data={"feed_interval_min": "5", "feed_cap_threshold": "25"}).headers
     assert "422" not in client.get("/review").text.split("htmx-config")[1].split(">")[0]
+
+
+def test_refresh_response_carries_oob_counts(client, seeded):
+    r = client.post("/fragments/refresh", headers={"HX-Current-URL": "http://t/settings"})
+    assert r.status_code == 200
+    assert 'id="tab-counts"' in r.text and "hx-swap-oob" in r.text
+    assert 'aria-current="page"' in r.text
+
+
+def test_settings_card_get_routes_and_refresh_triggers(client):
+    assert 'id="feed-card"' in client.get("/fragments/settings/feed").text
+    assert 'id="plex-card"' in client.get("/fragments/settings/plex").text
+    page = client.get("/settings").text
+    for n in ("feed", "plex"):
+        assert f'hx-get="/fragments/settings/{n}" hx-trigger="wm-refreshed from:body"' in page

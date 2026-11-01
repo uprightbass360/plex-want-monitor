@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -252,7 +252,13 @@ async def refresh(request: Request):
     scheduler = request.app.state.scheduler
     await scheduler.fetch_now()
     await scheduler.scan_now()
-    response = header_status(request)
+    store = request.app.state.store
+    path = urlparse(request.headers.get("HX-Current-URL", "")).path.strip("/")
+    ctx = {
+        "status": _header_status(store), "now": _now(), "tabs": TABS, "counts": _counts(store),
+        "tab": TABS.get(path), "page": "settings" if path == "settings" else None,
+    }
+    response = _render(["partials/header_status.html", "partials/counts.html"], ctx)
     response.headers["HX-Trigger"] = "wm-refreshed"
     return response
 

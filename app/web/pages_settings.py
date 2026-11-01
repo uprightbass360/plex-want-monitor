@@ -42,6 +42,11 @@ def _feed_ctx(request: Request, **extra) -> dict:
     }
 
 
+@router.get("/fragments/settings/feed", response_class=HTMLResponse)
+def feed_card(request: Request):
+    return _card(request, "feed_card", _feed_ctx(request))
+
+
 @router.post("/fragments/settings/feed", response_class=HTMLResponse)
 def save_feed(request: Request, feed_url: Text = None, feed_interval_min: Text = None,
               feed_cap_threshold: Text = None):
@@ -127,6 +132,11 @@ def _plex_ctx(request: Request, *, expired: bool = False, note: str | None = Non
 
 def _plex(request: Request, code: int = 200, **kw) -> HTMLResponse:
     return _card(request, "plex_card", _plex_ctx(request, **kw), code)
+
+
+@router.get("/fragments/settings/plex", response_class=HTMLResponse)
+def plex_card(request: Request):
+    return _plex(request)
 
 
 @router.post("/fragments/plex/pin", response_class=HTMLResponse)

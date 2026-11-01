@@ -1,4 +1,4 @@
-<section id="plex-card" class="card">
+<section id="plex-card" class="card" hx-get="/fragments/settings/plex" hx-trigger="wm-refreshed from:body" hx-swap="outerHTML">
   <h4>Plex connection</h4>
   {% if error %}<div class="frow"><label></label><span class="err-text" role="alert">{{ error }}</span></div>{% endif %}
   {% if state == "connect" or state == "expired" %}

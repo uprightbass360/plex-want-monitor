@@ -1,4 +1,4 @@
-<section id="feed-card" class="card">
+<section id="feed-card" class="card" hx-get="/fragments/settings/feed" hx-trigger="wm-refreshed from:body" hx-swap="outerHTML">
   <h4>Watchlist feed</h4>
   <form hx-post="/fragments/settings/feed" hx-target="#feed-card" hx-swap="outerHTML">
     <div class="frow"><label for="feed_url">RSS URL</label>
