@@ -78,6 +78,17 @@ class PlexTransport:
         data = (self.fixtures / name).read_bytes()
         return httpx.Response(200, content=data, headers={"Content-Type": "application/json"})
 
+    def _page(self, name, request):
+        body = json.loads((self.fixtures / name).read_text())
+        mc = body["MediaContainer"]
+        items = mc.get("Metadata", [])
+        params = request.url.params
+        start = int(params.get("X-Plex-Container-Start", 0))
+        size = int(params.get("X-Plex-Container-Size", len(items) or 1))
+        page = items[start : start + size]
+        mc.update(Metadata=page, totalSize=len(items), size=len(page), offset=start)
+        return httpx.Response(200, json=body)
+
     def claim_pin(self, token):
         self.token = token
 
@@ -114,9 +125,9 @@ class PlexTransport:
         if path == "/library/sections":
             return self._json("sections.json")
         if path == "/library/sections/2/all":
-            return self._json("movies_all.json")
+            return self._page("movies_all.json", request)
         if path == "/library/sections/3/all":
-            return self._json("shows_all.json")
+            return self._page("shows_all.json", request)
         return httpx.Response(404)
 
 

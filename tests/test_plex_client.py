@@ -123,3 +123,70 @@ def test_no_token_in_logs(server_client_broken, caplog):
     with pytest.raises(PlexError):
         server_client_broken.sections()
     assert "secret-tok" not in caplog.text
+
+
+def _paged_http(total, pages_seen, include_total=True, fail_start=None):
+    def handler(r):
+        start = int(r.url.params["X-Plex-Container-Start"])
+        size = int(r.url.params["X-Plex-Container-Size"])
+        pages_seen.append((start, size))
+        if start == fail_start:
+            return httpx.Response(500)
+        items = [
+            {"ratingKey": str(i), "title": f"T{i}", "type": "movie"}
+            for i in range(start, min(start + size, total))
+        ]
+        mc = {"Metadata": items}
+        if include_total:
+            mc["totalSize"] = total
+        return httpx.Response(200, json={"MediaContainer": mc})
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_list_all_concatenates_pages_in_order(transport):
+    c = PlexServerClient("https://x:1", "t", transport.client)
+    entries = c.list_all("2", page_size=2)
+    assert len(entries) == 3 and entries[0].rating_key == "14696"
+    reqs = [r for r in transport.requests if r.url.path.endswith("/all")]
+    assert [r.url.params["X-Plex-Container-Start"] for r in reqs] == ["0", "2"]
+    assert all(r.url.params["X-Plex-Container-Size"] == "2" for r in reqs)
+    assert all(r.url.params["includeGuids"] == "1" for r in reqs)
+
+
+def test_list_all_honours_total_size_and_stops():
+    seen = []
+    c = PlexServerClient("https://x:1", "t", _paged_http(5, seen))
+    assert [e.rating_key for e in c.list_all("2", page_size=2)] == ["0", "1", "2", "3", "4"]
+    assert seen == [(0, 2), (2, 2), (4, 2)]
+
+
+def test_list_all_without_total_size_short_page_is_last():
+    seen = []
+    c = PlexServerClient("https://x:1", "t", _paged_http(5, seen, include_total=False))
+    assert len(c.list_all("2", page_size=2)) == 5
+    assert seen == [(0, 2), (2, 2), (4, 2)]
+
+
+def test_list_all_default_page_size_200():
+    seen = []
+    PlexServerClient("https://x:1", "t", _paged_http(1, seen)).list_all("2")
+    assert seen == [(0, 200)]
+
+
+def test_list_all_error_on_later_page_raises_plex_error():
+    c = PlexServerClient("https://x:1", "secret-tok", _paged_http(5, [], fail_start=2))
+    with pytest.raises(PlexError) as ei:
+        c.list_all("2", page_size=2)
+    assert "500" in str(ei.value) and "secret-tok" not in str(ei.value)
+
+
+def test_list_all_runaway_server_bounded():
+    def handler(r):
+        return httpx.Response(
+            200, json={"MediaContainer": {"totalSize": 10, "Metadata": [{"ratingKey": "1", "title": "x", "type": "movie"}]}}
+        )
+
+    c = PlexServerClient("https://x:1", "t", httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(PlexError):
+        c.list_all("2", page_size=2)

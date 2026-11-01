@@ -180,22 +180,47 @@ class PlexServerClient:
         except KeyError:
             raise PlexError("library section response is incomplete") from None
 
-    def list_all(self, section_key: str) -> list[PlexEntry]:
-        mc = self._get(f"/library/sections/{section_key}/all?includeGuids=1")
-        try:
-            return [
-                PlexEntry(
-                    rating_key=str(m["ratingKey"]),
-                    title=m["title"],
-                    year=m.get("year"),
-                    type=m["type"],
-                    guids=tuple(g["id"] for g in m.get("Guid") or []),
-                    plex_guid=m.get("guid") or None,
+    def list_all(self, section_key: str, page_size: int = 200) -> list[PlexEntry]:
+        out: list[PlexEntry] = []
+        start = 0
+        total: int | None = None
+        max_pages = 1000  # replaced by totalSize // page_size + 2 once totalSize is known
+        pages = 0
+        while True:
+            mc = self._get(
+                f"/library/sections/{section_key}/all?includeGuids=1"
+                f"&X-Plex-Container-Start={start}&X-Plex-Container-Size={page_size}"
+            )
+            pages += 1
+            try:
+                page = mc.get("Metadata") or []
+                out.extend(
+                    PlexEntry(
+                        rating_key=str(m["ratingKey"]),
+                        title=m["title"],
+                        year=m.get("year"),
+                        type=m["type"],
+                        guids=tuple(g["id"] for g in m.get("Guid") or []),
+                        plex_guid=m.get("guid") or None,
+                    )
+                    for m in page
                 )
-                for m in mc.get("Metadata", [])
-            ]
-        except KeyError:
-            raise PlexError("library listing response is incomplete") from None
+                if mc.get("totalSize") is not None:
+                    total = int(mc["totalSize"])
+            except (KeyError, TypeError, ValueError, AttributeError):
+                raise PlexError("library listing response is incomplete") from None
+            start += len(page)
+            if not page:
+                return out
+            if total is None:
+                if len(page) < page_size:
+                    return out
+            else:
+                max_pages = total // page_size + 2
+                if start >= total:
+                    return out
+            if pages >= max_pages:
+                raise PlexError("library listing is too long to read completely")
 
 
 def pick_connection(
