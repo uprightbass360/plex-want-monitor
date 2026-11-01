@@ -1,0 +1,63 @@
+<section id="plex-card" class="card">
+  <h4>Plex connection</h4>
+  {% if error %}<div class="frow"><label></label><span class="err-text" role="alert">{{ error }}</span></div>{% endif %}
+  {% if state == "connect" or state == "expired" %}
+  <div class="frow"><label>Status</label>
+    {% if state == "expired" %}<span class="muted">That code expired.</span>{% endif %}
+    <button type="button" class="btn ok" hx-post="/fragments/plex/pin" hx-target="#plex-card" hx-swap="outerHTML" hx-disabled-elt="this">{{ "Start again" if state == "expired" else "Connect to Plex" }}</button>
+  </div>
+  {% elif state == "pending" %}
+  <div class="frow" hx-get="/fragments/plex/pin" hx-trigger="every 3s" hx-target="#plex-card" hx-swap="outerHTML">
+    <label>Step 1</label><span>Go to <a href="https://plex.tv/link" target="_blank" rel="noopener"><b>plex.tv/link</b></a> and enter <span class="pin">{{ plex.pending_pin.code }}</span></span>
+  </div>
+  <div class="frow"><label>Step 2</label><span class="muted">Waiting for you to authorize. This card updates itself.</span></div>
+  {% elif state == "pick" %}
+  <div class="frow"><label>Status</label><span><span class="ok-dot">&#9679;</span> Signed in as <b>{{ plex.username }}</b></span>
+    <button type="button" class="btn" style="margin-left:auto" hx-post="/fragments/plex/signout" hx-confirm="Sign out of Plex?" hx-target="#plex-card" hx-swap="outerHTML">Sign out</button></div>
+  <div class="frow"><label>Pick a server</label>
+    {% for s in servers %}
+    <form hx-post="/fragments/plex/server" hx-target="#plex-card" hx-swap="outerHTML">
+      <input type="hidden" name="machine_id" value="{{ s.machine_id }}">
+      <button type="submit" class="btn">{{ s.name }}{% if s.version %} <span class="muted">({{ s.version }})</span>{% endif %}</button>
+    </form>
+    {% else %}<span class="muted">No servers found on this Plex account.</span>{% endfor %}
+  </div>
+  {% else %}
+  <div class="frow"><label>Status</label>
+    <span><span class="ok-dot">&#9679;</span> Signed in as <b>{{ plex.username }}</b> &middot; server <b>{{ plex.server.name }}</b> (PMS {{ plex.server.version }}, {{ plex.server.base_url_host }})</span>
+    <span style="margin-left:auto" class="actions">
+      <button type="button" class="btn" hx-post="/fragments/plex/reconnect" hx-target="#plex-card" hx-swap="outerHTML" hx-disabled-elt="this">Reconnect</button>
+      <button type="button" class="btn warn" hx-post="/fragments/plex/signout" hx-confirm="Sign out of Plex? The selected server is forgotten." hx-target="#plex-card" hx-swap="outerHTML">Sign out</button>
+    </span></div>
+  <form class="frow" hx-post="/fragments/plex/server" hx-trigger="change" hx-target="#plex-card" hx-swap="outerHTML">
+    <label for="machine_id">Server</label>
+    <select id="machine_id" name="machine_id">
+      {% for s in servers %}<option value="{{ s.machine_id }}"{% if s.machine_id == plex.server.machine_id %} selected{% endif %}>{{ s.name }}</option>{% endfor %}
+      {% if not servers %}<option value="{{ plex.server.machine_id }}" selected>{{ plex.server.name }}</option>{% endif %}
+    </select>
+  </form>
+  <form class="frow" hx-post="/fragments/settings/libraries" hx-trigger="change" hx-target="#plex-card" hx-swap="outerHTML">
+    <label>Libraries to scan</label>
+    <span class="chips">
+      {% for lib in libraries %}
+      <label class="chip"><input type="checkbox" name="library_keys" value="{{ lib.key }}"{% if lib.checked %} checked{% endif %}>{{ lib.title }}</label>
+      {% else %}<span class="muted">No libraries found.</span>{% endfor %}
+    </span>
+  </form>
+  <form class="frow" hx-post="/fragments/settings/scan" hx-target="#plex-card" hx-swap="outerHTML">
+    <label for="scan_interval_min">Scan every</label>
+    <input id="scan_interval_min" name="scan_interval_min" type="number" min="1" max="1440" class="in narrow" value="{{ scan_interval }}"><span class="muted">min</span>
+    <button type="submit" class="btn">Save</button>
+    <button type="button" class="btn" style="margin-left:auto" hx-post="/fragments/settings/scan/run" hx-target="#plex-card" hx-swap="outerHTML" hx-disabled-elt="this">Scan now</button>
+    {% if note %}<span class="ok-text" role="status">{{ note }}</span>{% endif %}
+  </form>
+  <p class="muted summary">
+    {% if scan %}
+      Last scan {{ scan.finished_at|ago(now) }}:
+      {% if scan.ok %}{{ scan.indexed }} indexed, {{ scan.matched }} matched{% if scan.reverted %}, {{ scan.reverted }} reverted{% endif %}
+      {% else %}<span class="err-text">{{ scan.error }}</span>{% endif %}
+      {% for lib in scan.libraries if lib.error %}<br><span class="err-text">{{ lib.name or lib.title or lib.key }}: {{ lib.error }}</span>{% endfor %}
+    {% else %}No scan yet.{% endif %}
+  </p>
+  {% endif %}
+</section>

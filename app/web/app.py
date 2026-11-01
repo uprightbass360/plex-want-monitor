@@ -18,6 +18,7 @@ from app.scheduler import Scheduler
 from app.store import Store
 from app.web.api import router as api_router
 from app.web.pages import router as pages_router
+from app.web.pages_settings import router as settings_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -84,5 +85,6 @@ def create_app(
     app.state.scheduler = scheduler
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(api_router)
+    app.include_router(settings_router)  # before pages: its catch-all /{tab_key} must stay last
     app.include_router(pages_router)
     return app

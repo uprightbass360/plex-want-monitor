@@ -1,0 +1,28 @@
+<section id="feed-card" class="card">
+  <h4>Watchlist feed</h4>
+  <form hx-post="/fragments/settings/feed" hx-target="#feed-card" hx-swap="outerHTML">
+    <div class="frow"><label for="feed_url">RSS URL</label>
+      <input id="feed_url" name="feed_url" type="text" class="in wide" autocomplete="off" value="" placeholder="{{ masked or 'https://rss.plex.tv/...' }}">
+      <button type="button" class="btn" hx-post="/fragments/settings/feed/test" hx-include="#feed_url" hx-target="#feed-card" hx-swap="outerHTML" hx-disabled-elt="this">Test</button>
+    </div>
+    <div class="frow"><label for="feed_interval_min">Poll every</label>
+      <input id="feed_interval_min" name="feed_interval_min" type="number" min="1" max="1440" class="in narrow" value="{{ interval }}"><span class="muted">min</span>
+      <label for="feed_cap_threshold" class="inline">Cap threshold</label>
+      <input id="feed_cap_threshold" name="feed_cap_threshold" type="number" min="1" max="500" class="in narrow" value="{{ cap }}"><span class="muted">items</span>
+    </div>
+    <div class="frow"><label></label>
+      <button type="submit" class="btn prominent">Save</button>
+      <button type="button" class="btn" hx-post="/fragments/settings/feed/fetch" hx-target="#feed-card" hx-swap="outerHTML" hx-disabled-elt="this">Fetch now</button>
+      {% if note %}<span class="ok-text" role="status">{{ note }}</span>{% endif %}
+      {% if test %}<span class="{{ 'ok-text' if test.ok else 'err-text' }}" role="status">Test: {{ test.text }}</span>{% endif %}
+      {% if error %}<span class="err-text" role="alert">{{ error }}</span>{% endif %}
+    </div>
+  </form>
+  <p class="muted summary">
+    {% if fetch %}
+      Last fetch {{ fetch.finished_at|ago(now) }}:
+      {% if fetch.ok %}{{ fetch.item_count }} items, {{ fetch.new_count }} new{% if fetch.status_code == 304 %} (not modified){% endif %}{% if fetch.truncated %}, may be truncated{% endif %}
+      {% else %}<span class="err-text">{{ fetch.error }}</span>{% endif %}
+    {% else %}No fetch yet.{% endif %}
+  </p>
+</section>

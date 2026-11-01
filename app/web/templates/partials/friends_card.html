@@ -1,0 +1,6 @@
+<section id="friends-card" class="card">
+  <h4>Friends</h4>
+  <p class="muted">Label the friends who add things to your watchlist. Labels show on the list rows.</p>
+  {% for a in authors %}{% include "partials/friend_row.html" %}
+  {% else %}<p class="muted">No friends seen in the feed yet.</p>{% endfor %}
+</section>

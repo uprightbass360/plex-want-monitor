@@ -206,6 +206,11 @@ class FakeHttp:
         base = f"{u.scheme}://{u.host}" + (f":{u.port}" if u.port else "")
         if base in self.dead_uris:
             raise httpx.ConnectError("dead")
+        if u.path == "/library/sections":
+            return httpx.Response(200, json={"MediaContainer": {"Directory": [
+                {"key": "2", "type": "movie", "title": "Movies"},
+                {"key": "3", "type": "show", "title": "TV Shows"},
+            ]}})
         return httpx.Response(200, json={"MediaContainer": {}})
 
     def __getattr__(self, name):

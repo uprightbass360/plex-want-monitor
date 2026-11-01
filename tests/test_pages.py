@@ -194,3 +194,111 @@ def test_queue_filter_fragment_and_put_back(client, seeded, store, now):
     assert "Battle Beyond the Stars" not in r.text
     r = client.post(f"/fragments/items/{ids[0]}/status", data={"status": "review", "tab": "queue"})
     assert f'data-item-id="{ids[0]}"' not in r.text and store.get_item(ids[0]).status == "review"
+
+
+# ---- settings page ----
+
+
+def test_settings_renders_and_saves_feed(client, store):
+    assert "Connect to Plex" in client.get("/settings").text
+    r = client.post("/fragments/settings/feed", data={"feed_url": "https://rss.plex.tv/zzzz-81e5", "feed_interval_min": "10", "feed_cap_threshold": "25"})
+    assert "Saved" in r.text and "zzzz" not in r.text and "81e5" in r.text
+    assert store.get_setting("feed_interval_min") == 10
+    r = client.post("/fragments/settings/feed", data={"feed_url": "", "feed_interval_min": "10", "feed_cap_threshold": "25"})
+    assert store.get_setting("feed_url").endswith("81e5")
+
+
+def test_plex_pin_card_flow(client, fake_plextv):
+    r = client.post("/fragments/plex/pin"); assert "plex.tv/link" in r.text and 'hx-trigger="every 3s"' in r.text
+    fake_plextv.claim("tok", username="s4m")
+    r = client.get("/fragments/plex/pin"); assert "s4m" in r.text and "tok" not in r.text
+    r = client.post("/fragments/plex/server", data={"machine_id": "marvin-id"})
+    assert "Marvin" in r.text and "Sign out" in r.text and 'name="library_keys"' in r.text
+
+
+def test_friends_label(client, seeded, store):
+    r = client.post("/fragments/settings/friends", data={"hash": "friend-a", "label": "Sam"})
+    assert "Sam" in r.text and {a.hash: a.label for a in store.list_authors()}["friend-a"] == "Sam"
+
+
+def test_settings_page_has_tab_cards_and_no_secrets(connected_client, seeded, fake_server):
+    fake_server.add_section("2", "Movies"); fake_server.add_section("3", "TV Shows")
+    html = connected_client.get("/settings").text
+    assert 'href="/settings"' in html and 'id="feed-card"' in html and 'id="plex-card"' in html
+    assert 'id="friends-card"' in html and "/api/items/queue.txt" in html and "/api/status" in html
+    assert "8e18" not in html and "81e5" in html and "tok-1" not in html and "srv-tok" not in html
+    assert "Marvin" in html and "https://local.marvin" not in html
+    assert 'hx-confirm' in html and 'name="scan_interval_min"' in html
+    assert html.count('name="library_keys"') == 2 and html.count(" checked") >= 2
+
+
+def test_feed_validation_error_is_422_and_not_saved(client, store):
+    r = client.post("/fragments/settings/feed", data={"feed_url": "", "feed_interval_min": "0", "feed_cap_threshold": "25"})
+    assert r.status_code == 422 and 'id="feed-card"' in r.text and "between 1 and 1440" in r.text
+    r = client.post("/fragments/settings/feed", data={"feed_url": "", "feed_interval_min": "5", "feed_cap_threshold": "501"})
+    assert r.status_code == 422 and store.get_setting("feed_interval_min") is None
+    r = client.post("/fragments/settings/feed", data={"feed_url": "", "feed_interval_min": "abc", "feed_cap_threshold": "25"})
+    assert r.status_code == 422
+
+
+def test_feed_test_does_not_save_or_leak(client, store, fetcher, fixture_bytes):
+    fetcher.queue(FetchResponse(200, fixture_bytes, "etag-x"))
+    r = client.post("/fragments/settings/feed/test", data={"feed_url": "https://rss.plex.tv/secret-7777", "feed_interval_min": "10", "feed_cap_threshold": "25"})
+    assert " items" in r.text and "secret" not in r.text
+    assert fetcher.last_url.endswith("secret-7777") and fetcher.last_etag is None
+    assert store.get_setting("feed_url") is None and store.get_setting("feed_etag") is None
+    r = client.post("/fragments/settings/feed/test", data={"feed_url": "https://rss.plex.tv/secret-7777"})
+    assert "AssertionError" in r.text and "secret" not in r.text
+
+
+def test_fetch_now_rerenders_feed_card(client, seeded, store, fetcher, fixture_bytes):
+    fetcher.queue(FetchResponse(200, fixture_bytes, None))
+    r = client.post("/fragments/settings/feed/fetch")
+    assert 'id="feed-card"' in r.text and "Last fetch" in r.text and "8e18" not in r.text
+
+
+def test_plex_expired_and_none_states(client, fake_plextv, clock):
+    client.post("/fragments/plex/pin")
+    clock.advance(minutes=31)
+    r = client.get("/fragments/plex/pin")
+    assert "Start again" in r.text and "every 3s" not in r.text
+    r = client.get("/fragments/plex/pin")
+    assert "Connect to Plex" in r.text and "every 3s" not in r.text
+
+
+def test_single_server_auto_selects(client, fake_plextv):
+    del fake_plextv.resources[1]
+    client.post("/fragments/plex/pin"); fake_plextv.claim("tok")
+    r = client.get("/fragments/plex/pin")
+    assert "Sign out" in r.text and "Marvin" in r.text and "1.43.5" in r.text
+
+
+def test_plex_server_error_is_502(client, fake_plextv):
+    client.post("/fragments/plex/pin"); fake_plextv.claim("tok"); client.get("/fragments/plex/pin")
+    r = client.post("/fragments/plex/server", data={"machine_id": "nope"})
+    assert r.status_code == 502 and 'id="plex-card"' in r.text and "server not found" in r.text
+
+
+def test_libraries_scan_interval_reconnect_signout(connected_client, store):
+    c = connected_client
+    r = c.post("/fragments/settings/libraries", data={"library_keys": ["2"]})
+    assert store.get_setting("selected_library_keys") == ["2"] and "Saved" in r.text
+    r = c.post("/fragments/settings/libraries", data={})
+    assert store.get_setting("selected_library_keys") is None
+    r = c.post("/fragments/settings/scan", data={"scan_interval_min": "45"})
+    assert store.get_setting("scan_interval_min") == 45 and 'value="45"' in r.text
+    r = c.post("/fragments/settings/scan", data={"scan_interval_min": "5000"})
+    assert r.status_code == 422 and 'id="plex-card"' in r.text
+    assert "Sign out" in c.post("/fragments/plex/reconnect").text
+    r = c.post("/fragments/plex/signout")
+    assert "Connect to Plex" in r.text and "Sign out" not in r.text
+
+
+def test_scan_now_shows_summary(connected_client, store):
+    r = connected_client.post("/fragments/settings/scan/run")
+    assert 'id="plex-card"' in r.text and "Last scan" in r.text
+
+
+def test_friends_row_escapes_label(client, seeded):
+    r = client.post("/fragments/settings/friends", data={"hash": "friend-a", "label": "<b>x</b>"})
+    assert "<b>x</b>" not in r.text and "&lt;b&gt;" in r.text

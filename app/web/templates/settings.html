@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Settings · Want Monitor{% endblock %}
+{% block content %}
+<div class="settings">
+  {% include "partials/feed_card.html" %}
+  {% include "partials/plex_card.html" %}
+  {% include "partials/friends_card.html" %}
+  {% include "partials/json_card.html" %}
+</div>
+{% endblock %}
