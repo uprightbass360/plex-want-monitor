@@ -230,11 +230,6 @@ def test_plex_pin_card_flow(client, fake_plextv):
     assert "Marvin" in r.text and "Sign out" in r.text and 'name="library_keys"' in r.text
 
 
-def test_friends_label(client, seeded, store):
-    r = client.post("/fragments/settings/friends", data={"hash": "friend-a", "label": "Sam"})
-    assert "Sam" in r.text and {a.hash: a.label for a in store.list_authors()}["friend-a"] == "Sam"
-
-
 def test_settings_page_has_tab_cards_and_no_secrets(connected_client, seeded, fake_server):
     fake_server.add_section("2", "Movies"); fake_server.add_section("3", "TV Shows")
     html = connected_client.get("/settings").text
@@ -298,7 +293,8 @@ def test_libraries_scan_interval_reconnect_signout(connected_client, store):
     r = c.post("/fragments/settings/libraries", data={"library_keys": ["2"]})
     assert store.get_setting("selected_library_keys") == ["2"] and "Saved" in r.text
     r = c.post("/fragments/settings/libraries", data={})
-    assert store.get_setting("selected_library_keys") is None
+    assert r.status_code == 422 and r.headers["X-WM-Card"] == "1" and 'id="plex-card"' in r.text
+    assert "Select at least one library" in r.text and store.get_setting("selected_library_keys") == ["2"]
     r = c.post("/fragments/settings/scan", data={"scan_interval_min": "45"})
     assert store.get_setting("scan_interval_min") == 45 and 'value="45"' in r.text
     r = c.post("/fragments/settings/scan", data={"scan_interval_min": "5000"})
@@ -313,9 +309,11 @@ def test_scan_now_shows_summary(connected_client, store):
     assert 'id="plex-card"' in r.text and "Last scan" in r.text
 
 
-def test_friends_row_escapes_label(client, seeded):
-    r = client.post("/fragments/settings/friends", data={"hash": "friend-a", "label": "<b>x</b>"})
-    assert "<b>x</b>" not in r.text and "&lt;b&gt;" in r.text
+def test_friends_row_escapes_label_set_via_api(client, seeded):
+    assert client.post("/fragments/settings/friends", data={"hash": "friend-a", "label": "x"}).status_code in (404, 405)
+    client.put("/api/settings", json={"friends": [{"hash": "friend-a", "label": "<b>x</b>"}]})
+    html = client.get("/settings").text
+    assert "<b>x</b>" not in html and "&lt;b&gt;x&lt;/b&gt;" in html
 
 
 def test_settings_error_cards_carry_swap_header_and_base_config_unchanged(client, connected_client):
@@ -438,3 +436,70 @@ def test_review_row_shows_genres_capped(client, seeded, store):
     store.conn.execute("UPDATE items SET keywords=? WHERE id=?", ("drama,comedy,horror,war,western", item.id))
     html = client.get("/review").text
     assert "drama, comedy, horror, war" in html and "western" not in html
+
+
+# ---- settings never blocks on Plex ----
+
+
+def _scan_log(store, now, keys=(("2", "Movies"), ("3", "TV Shows"))):
+    from app.models import ScanLog
+
+    libs = [{"key": k, "name": n, "ok": True, "count": 1, "error": None} for k, n in keys]
+    store.log_scan(ScanLog(now, now, True, machine_id="marvin-id", libraries=libs))
+
+
+def test_settings_uses_scan_log_libraries_when_server_is_down(connected_client, store, fake_server, now):
+    from app.plex_client import PlexError
+
+    def down():
+        raise PlexError("server down")
+
+    fake_server.sections = down
+    _scan_log(store, now)
+    r = connected_client.get("/settings")
+    assert r.status_code == 200 and r.text.count('name="library_keys"') == 2
+    assert "TV Shows" in r.text and "server down" not in r.text
+    r = connected_client.get("/fragments/settings/plex")
+    assert r.status_code == 200 and r.text.count('name="library_keys"') == 2
+
+
+def test_settings_lists_unselected_libraries_from_scan(connected_client, store, fake_server):
+    fake_server.add_section("2", "Movies"); fake_server.add_section("3", "TV Shows")
+    store.set_setting("selected_library_keys", ["2"])
+    assert connected_client.post("/fragments/settings/scan/run").status_code == 200
+    fake_server.sections = None  # any live call would now fail loudly
+    html = connected_client.get("/settings").text
+    assert html.count('name="library_keys"') == 2 and html.count('name="library_keys" value="3" checked') == 0
+
+
+def test_connected_settings_does_not_list_servers(connected_client, fake_plextv, store, now):
+    _scan_log(store, now)
+    fake_plextv.servers_calls = 0
+    html = connected_client.get("/settings").text
+    assert fake_plextv.servers_calls == 0
+    assert html.count("<option") == 1 and "Marvin" in html and 'hx-get="/fragments/plex/servers"' in html
+    r = connected_client.get("/fragments/plex/servers")
+    assert r.status_code == 200 and fake_plextv.servers_calls == 1
+    assert "other-server" in r.text and 'id="server-picker"' in r.text and "Change server" not in r.text
+
+
+def test_server_list_fragment_error_is_502_card(connected_client, fake_plextv):
+    from app.plex_client import PlexError
+
+    def down(token):
+        raise PlexError("plex.tv down")
+
+    fake_plextv.servers = down
+    r = connected_client.get("/fragments/plex/servers")
+    assert r.status_code == 502 and r.headers["X-WM-Card"] == "1" and "plex.tv down" in r.text
+
+
+def test_switching_server_resets_library_selection(connected_client, store):
+    store.set_setting("selected_library_keys", ["2"])
+    connected_client.post("/fragments/plex/server", data={"machine_id": "marvin-id"})
+    assert store.get_setting("selected_library_keys") == ["2"]
+    r = connected_client.post("/fragments/plex/server", data={"machine_id": "other-server-id"})
+    assert r.status_code == 200 and store.get_setting("selected_library_keys") is None
+    store.set_setting("selected_library_keys", ["9"])
+    connected_client.post("/api/plex/server", json={"machine_id": "marvin-id"})
+    assert store.get_setting("selected_library_keys") is None

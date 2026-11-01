@@ -56,7 +56,7 @@ def create_app(
         auth = PlexAuth(
             config.plex_path,
             plextv,
-            lambda url, token: PlexServerClient(url, token, http),
+            lambda url, token, timeout=30: PlexServerClient(url, token, http, timeout),
             http,
             _utcnow,
         )

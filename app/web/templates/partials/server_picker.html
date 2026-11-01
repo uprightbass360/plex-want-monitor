@@ -1,0 +1,8 @@
+<span id="server-picker" class="actions">
+  <select id="machine_id" name="machine_id">
+    {% for s in servers %}<option value="{{ s.machine_id }}"{% if s.machine_id == plex.server.machine_id %} selected{% endif %}>{{ s.name }}</option>{% endfor %}
+    {% if not servers %}<option value="{{ plex.server.machine_id }}" selected>{{ plex.server.name }}</option>{% endif %}
+  </select>
+  {% if not servers %}<button type="button" class="btn" hx-get="/fragments/plex/servers" hx-target="#server-picker" hx-swap="outerHTML" hx-disabled-elt="this">Change server…</button>{% endif %}
+  {% if server_error %}<span class="err-text" role="alert">{{ server_error }}</span>{% endif %}
+</span>

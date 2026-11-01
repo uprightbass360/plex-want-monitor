@@ -37,3 +37,16 @@ def parse_setting_int(key: str, value: str | None) -> int | None:
 def range_error(label: str, key: str) -> str:
     low, high = RANGES[key]
     return f"{label} must be a whole number between {low} and {high}."
+
+
+def select_server(store, auth, machine_id: str):
+    """Select a Plex server; a different server than before resets the library selection to all."""
+    current = auth.status()["server"]
+    previous = current["machine_id"] if current else None
+    if previous is None:
+        scan = store.last_scan()
+        previous = scan.machine_id if scan else None
+    info = auth.select_server(machine_id)
+    if previous != info.machine_id:
+        store.set_setting("selected_library_keys", None)
+    return info

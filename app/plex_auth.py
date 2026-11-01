@@ -1,5 +1,8 @@
+import contextlib
 import json
 import os
+import tempfile
+import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -42,7 +45,7 @@ class PlexAuth:
         self,
         path: Path,
         plextv: PlexTV,
-        server_factory: Callable[[str, str], PlexServerClient],
+        server_factory: Callable[..., PlexServerClient],
         http: httpx.Client,
         clock: Callable[[], datetime],
         community_factory: Callable[[str, str], PlexCommunity] | None = None,
@@ -53,7 +56,9 @@ class PlexAuth:
         self.http = http
         self.clock = clock
         self.community_factory = community_factory or (lambda token, client_id: PlexCommunity(http, token, client_id))
-        self._state = self._load()
+        self._lock = threading.Lock()  # held across every state mutation and its _save
+        with self._lock:
+            self._state = self._load()
 
     @property
     def client_id(self) -> str:
@@ -80,23 +85,28 @@ class PlexAuth:
         return state
 
     def _save(self) -> None:
-        tmp = self.path.with_name(self.path.name + ".tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump(self._state, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, self.path)
+        """Write the state atomically. Callers hold self._lock."""
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=self.path.name + ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:  # mkstemp creates the file 0600
+                json.dump(self._state, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self.path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
 
     def start_pin(self) -> Pin:
         pin = self.plextv.create_pin()
-        self._state["pending_pin"] = {
-            "id": pin.id,
-            "code": pin.code,
-            "expires_at": pin.expires_at.isoformat(),
-        }
-        self._save()
+        with self._lock:
+            self._state["pending_pin"] = {
+                "id": pin.id,
+                "code": pin.code,
+                "expires_at": pin.expires_at.isoformat(),
+            }
+            self._save()
         return pin
 
     def poll_pin(self) -> PinStatus:
@@ -105,8 +115,9 @@ class PlexAuth:
             return PinStatus("none", None)
         code = pending["code"]
         if self.clock() >= datetime.fromisoformat(pending["expires_at"]):
-            self._state["pending_pin"] = None
-            self._save()
+            with self._lock:
+                self._state["pending_pin"] = None
+                self._save()
             return PinStatus("expired", code)
         try:
             token = self.plextv.check_pin(pending["id"])
@@ -115,8 +126,9 @@ class PlexAuth:
             username = self.plextv.user(token).username
         except PlexError:
             return PinStatus("waiting", code)  # transient: keep the PIN
-        self._state.update(token=token, username=username, pending_pin=None)
-        self._save()
+        with self._lock:
+            self._state.update(token=token, username=username, pending_pin=None)
+            self._save()
         return PinStatus("claimed", code)
 
     def _token(self) -> str:
@@ -140,14 +152,16 @@ class PlexAuth:
 
     def select_server(self, machine_id: str) -> ServerInfo:
         resource, url = self._resolve(machine_id)
-        self._state["server"] = {
+        server = {
             "name": resource.name,
             "machine_id": resource.machine_id,
             "base_url": url,
             "access_token": resource.access_token or self._token(),
             "version": resource.version,
         }
-        self._save()
+        with self._lock:
+            self._state["server"] = server
+            self._save()
         return ServerInfo(resource.name, resource.machine_id, url, resource.version)
 
     def reconnect(self) -> ServerInfo:
@@ -155,24 +169,30 @@ class PlexAuth:
         if not server:
             raise PlexError("no server selected")
         resource, url = self._resolve(server["machine_id"])
-        server.update(
-            name=resource.name,
-            base_url=url,
-            version=resource.version,
-            access_token=resource.access_token or self._token(),
-        )
-        self._save()
-        return ServerInfo(server["name"], server["machine_id"], url, server["version"])
+        updated = {
+            **server,
+            "name": resource.name,
+            "base_url": url,
+            "version": resource.version,
+            "access_token": resource.access_token or self._token(),
+        }
+        with self._lock:
+            self._state["server"] = updated
+            self._save()
+        return ServerInfo(updated["name"], updated["machine_id"], url, updated["version"])
 
     def signout(self) -> None:
-        self._state.update(token=None, username=None, pending_pin=None, server=None)
-        self._save()
+        with self._lock:
+            self._state.update(token=None, username=None, pending_pin=None, server=None)
+            self._save()
 
-    def server_client(self) -> PlexServerClient | None:
+    def server_client(self, timeout: float | None = None) -> PlexServerClient | None:
         s = self._state["server"]
         if not s:
             return None
-        return self.server_factory(s["base_url"], s["access_token"])
+        if timeout is None:
+            return self.server_factory(s["base_url"], s["access_token"])
+        return self.server_factory(s["base_url"], s["access_token"], timeout=timeout)
 
     def community_client(self) -> PlexCommunity | None:
         token = self._state["token"]

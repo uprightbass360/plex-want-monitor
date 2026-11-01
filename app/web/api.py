@@ -11,7 +11,9 @@ from app.lifecycle import STATUSES, InvalidTransition, apply_not_a_match, apply_
 from app.models import SORTS, ItemFilter, item_to_dict
 from app.plex_client import PlexError
 from app.store import StaleStatus
-from app.web.settings_shared import CAP_MAX, CAP_MIN, DEFAULTS, INTERVAL_MAX, INTERVAL_MIN, mask_feed_url
+from app.web.settings_shared import (
+    CAP_MAX, CAP_MIN, DEFAULTS, INTERVAL_MAX, INTERVAL_MIN, mask_feed_url, select_server,
+)
 
 router = APIRouter()
 
@@ -281,7 +283,8 @@ def plex_select_server(request: Request, body: ServerBody):
     auth = request.app.state.auth
     if not auth.status()["signed_in"]:
         return _error(409, _NOT_SIGNED_IN)
-    return _plex_call(lambda: (auth.select_server(body.machine_id), auth.status())[1])
+    store = request.app.state.store
+    return _plex_call(lambda: (select_server(store, auth, body.machine_id), auth.status())[1])
 
 
 @router.post("/api/plex/reconnect")

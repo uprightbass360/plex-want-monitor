@@ -125,3 +125,12 @@ def test_scan_skips_item_whose_status_changed(store, feed_items, connected_auth,
     assert log.ok and log.matched == 0 and calls == ["review"]
     item = store.get_item_by_guid("imdb://tt1558972")
     assert item.status == "review" and item.plex_rating_key is None
+
+
+def test_unselected_libraries_recorded_but_not_listed(store, connected_auth, fake_server, now):
+    fake_server.add_movie("2", "Movies", "900", "Kings of Pastry", 2009, [])
+    fake_server.add_section("3", "TV Shows", "show")
+    store.set_setting("selected_library_keys", ["2"])
+    log = run_scan(store, connected_auth, now)
+    assert log.ok and log.indexed == 1
+    assert {"key": "3", "name": "TV Shows", "ok": None, "count": 0, "error": None, "selected": False} in log.libraries

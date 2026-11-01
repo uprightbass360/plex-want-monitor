@@ -152,6 +152,7 @@ class FakePlexTV:
         self.clock = clock
         self.token = None
         self.username = None
+        self.servers_calls = 0
         self.resources = [
             PlexResource(
                 "Marvin", "marvin-id", True, "srv-tok-marvin", "1.43.5",
@@ -183,6 +184,7 @@ class FakePlexTV:
         return PlexUser(1, self.username or "s4m")
 
     def servers(self, token):
+        self.servers_calls += 1
         return list(self.resources)
 
 
@@ -251,7 +253,7 @@ def make_auth(fake_plextv, fake_http, clock, fake_community):
         return PlexAuth(
             path,
             fake_plextv,
-            lambda url, token: PlexServerClient(url, token, fake_http.client),
+            lambda url, token, timeout=30: PlexServerClient(url, token, fake_http.client, timeout),
             fake_http.client,
             clock.now,
             community_factory=lambda token, client_id: fake_community,
@@ -343,7 +345,7 @@ def connected_auth(make_auth, fake_plextv, fake_server, fake_http, clock, tmp_pa
     auth = PlexAuth(
         tmp_path / "plex-connected.json",
         fake_plextv,
-        lambda url, token: fake_server,
+        lambda url, token, timeout=None: fake_server,
         fake_http.client,
         clock.now,
     )

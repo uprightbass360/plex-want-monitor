@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 
 from app.feed import parse_feed
 from app.plex_client import PlexError
-from app.web.settings_shared import DEFAULTS, mask_feed_url, parse_setting_int, range_error
+from app.web.settings_shared import DEFAULTS, parse_setting_int, range_error, select_server as _select_server
 from app.web.pages import TABS, _counts, _header_status, _now, templates
 
 router = APIRouter()
@@ -94,32 +94,40 @@ async def fetch_feed(request: Request):
 # ---- plex card ----
 
 
+LIVE_SECTIONS_TIMEOUT = 5.0  # only used when there is no scan log to read libraries from
+
+
+def _libraries(store, auth, server: dict) -> list[dict]:
+    """Library checkboxes: from the last scan on this server when there is one, else one short live call."""
+    selected = store.get_setting("selected_library_keys") or None
+    scan = store.last_scan()
+    if scan and scan.libraries and scan.machine_id == server["machine_id"]:
+        libs = [(lib["key"], lib.get("name") or lib["key"]) for lib in scan.libraries]
+    else:
+        client = auth.server_client(timeout=LIVE_SECTIONS_TIMEOUT)
+        libs = [(s.key, s.title) for s in (client.sections() if client else [])]
+    return [{"key": k, "title": t, "checked": selected is None or k in selected} for k, t in libs]
+
+
 def _plex_ctx(request: Request, *, expired: bool = False, note: str | None = None,
-              error: str | None = None, scan_interval=None) -> dict:
+              error: str | None = None, scan_interval=None, library_error: str | None = None) -> dict:
     store, auth = request.app.state.store, request.app.state.auth
     ctx = {"expired": expired, "note": note, "error": error, "now": _now(), "servers": [],
-           "libraries": [], "scan": None, "scan_interval": scan_interval}
+           "libraries": [], "scan": None, "scan_interval": scan_interval,
+           "library_error": library_error, "server_error": None}
     status = auth.status()
-    if status["signed_in"] and not status["server"]:
+    if status["signed_in"] and not status["server"]:  # "pick" state: the only automatic plex.tv call
         try:
             ctx["servers"] = auth.list_servers()
             if len(ctx["servers"]) == 1:
-                auth.select_server(ctx["servers"][0].machine_id)
+                _select_server(store, auth, ctx["servers"][0].machine_id)
                 status = auth.status()
+                ctx["servers"] = []
         except PlexError as exc:
             ctx["error"] = str(exc)
     if status["signed_in"] and status["server"]:
         try:
-            ctx["servers"] = auth.list_servers()
-        except PlexError as exc:
-            ctx["error"] = ctx["error"] or str(exc)
-        client = auth.server_client()
-        try:
-            selected = store.get_setting("selected_library_keys") or None
-            ctx["libraries"] = [
-                {"key": s.key, "title": s.title, "checked": selected is None or s.key in selected}
-                for s in (client.sections() if client else [])
-            ]
+            ctx["libraries"] = _libraries(store, auth, status["server"])
         except PlexError as exc:
             ctx["error"] = ctx["error"] or str(exc)
         ctx["scan"] = store.last_scan()
@@ -154,10 +162,26 @@ def poll_pin(request: Request):
     return _plex(request, expired=pin.state == "expired")
 
 
+@router.get("/fragments/plex/servers", response_class=HTMLResponse)
+def server_picker(request: Request):
+    """The server dropdown, populated from plex.tv on demand ("Change server…")."""
+    auth = request.app.state.auth
+    status = auth.status()
+    ctx = {"plex": status, "servers": [], "server_error": None}
+    code = 200
+    try:
+        ctx["servers"] = auth.list_servers()
+    except PlexError as exc:
+        ctx["server_error"], code = str(exc), 502
+    if status["server"] is None:  # nothing to pick against: show the whole card instead
+        return _plex(request, code, error=ctx["server_error"])
+    return _card(request, "server_picker", ctx, code)
+
+
 @router.post("/fragments/plex/server", response_class=HTMLResponse)
 def select_server(request: Request, machine_id: Annotated[str, Form()]):
     try:
-        request.app.state.auth.select_server(machine_id)
+        _select_server(request.app.state.store, request.app.state.auth, machine_id)
     except PlexError as exc:
         return _plex(request, 502, error=str(exc))
     return _plex(request)
@@ -180,7 +204,9 @@ def signout(request: Request):
 
 @router.post("/fragments/settings/libraries", response_class=HTMLResponse)
 def save_libraries(request: Request, library_keys: Annotated[list[str] | None, Form()] = None):
-    request.app.state.store.set_setting("selected_library_keys", list(library_keys) if library_keys else None)
+    if not library_keys:  # keep the previous selection
+        return _plex(request, 422, library_error="Select at least one library")
+    request.app.state.store.set_setting("selected_library_keys", list(library_keys))
     return _plex(request, note="Saved")
 
 
@@ -200,14 +226,6 @@ async def scan_now(request: Request):
 
 
 # ---- friends ----
-
-
-@router.post("/fragments/settings/friends", response_class=HTMLResponse)
-def save_friend(request: Request, hash: Annotated[str, Form()], label: Text = None):
-    store = request.app.state.store
-    store.set_author_label(hash, (label or "").strip() or None)
-    author = next((a for a in store.list_authors() if a.hash == hash), None)
-    return templates.TemplateResponse(request, "partials/friend_row.html", {"a": author, "saved": True})
 
 
 @router.post("/fragments/settings/friends/resolve", response_class=HTMLResponse)

@@ -171,7 +171,9 @@ def _not_rescanned(item, scan, selected) -> str | None:
     if selected and item.plex_library_key not in selected:
         return "library not selected"
     entry = next((lib for lib in scan.libraries if lib.get("key") == item.plex_library_key), None)
-    if entry is not None and not entry.get("ok"):
+    if entry is not None and entry.get("selected") is False:
+        return "library not selected"
+    if entry is not None and entry.get("ok") is False:
         return "library listing failed"
     if entry is not None and entry.get("ok") and entry.get("count") == 0:
         return "library listed empty"

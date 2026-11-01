@@ -25,6 +25,12 @@ def _scan(store: Store, auth: PlexAuth, now: datetime) -> ScanLog:
         return ScanLog(now, now, False, error=str(e))
 
     selected = store.get_setting("selected_library_keys")
+    # Unselected libraries are recorded (not listed) so Settings can offer every library
+    # from the scan log without calling Plex.
+    unselected = [
+        {"key": s.key, "name": s.title, "ok": None, "count": 0, "error": None, "selected": False}
+        for s in sections if selected and s.key not in selected
+    ]
     if selected:
         sections = [s for s in sections if s.key in selected]
 
@@ -72,6 +78,6 @@ def _scan(store: Store, auth: PlexAuth, now: datetime) -> ScanLog:
     return ScanLog(
         now, now, bool(listed_keys),
         error=None if listed_keys else "no library could be listed",
-        machine_id=machine_id, libraries=libraries,
+        machine_id=machine_id, libraries=libraries + unselected,
         indexed=len(index.rating_keys), matched=matched, reverted=reverted,
     )

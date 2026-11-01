@@ -106,3 +106,32 @@ def test_signout_keeps_client_id(signed_in_auth):
     signed_in_auth.signout()
     assert signed_in_auth.client_id == cid and signed_in_auth.status()["signed_in"] is False
     assert signed_in_auth.server_client() is None
+
+
+def test_concurrent_start_pin_and_signout_leave_valid_json(plex_auth):
+    import threading
+
+    errors = []
+
+    def run(fn):
+        try:
+            for _ in range(60):
+                fn()
+        except Exception as exc:  # pragma: no cover - surfaced by the assert below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run, args=(f,)) for f in (plex_auth.start_pin, plex_auth.signout) * 2]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    stored = json.loads(plex_auth.path.read_text())
+    assert stored["client_id"] == plex_auth.client_id
+    assert [p.name for p in plex_auth.path.parent.iterdir() if p.name != plex_auth.path.name and "plex" in p.name] == []
+
+
+def test_server_client_timeout_passes_through(signed_in_auth):
+    signed_in_auth.select_server("marvin-id")
+    assert signed_in_auth.server_client(timeout=5).timeout == 5
+    assert signed_in_auth.server_client().timeout == 30
