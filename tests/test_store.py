@@ -217,3 +217,39 @@ def test_count_by_author_statuses_in_feed_only(store, feed_items, now):
     store.mark_left_feed({"imdb://tt0080421"}, now)
     assert store.count_by_author(ItemFilter(statuses=("review",), in_feed=True)) == {}
     assert sum(store.count_by_author(ItemFilter(statuses=("review",), in_feed=False)).values()) == 4
+
+
+T = "2026-11-01T00:00:00+00:00"
+
+
+def _ids(store, **kw):
+    return {i.guid for i in store.list_items(ItemFilter(**kw))}
+
+
+def test_unmonitored_hidden_rule_across_list_counts_and_authors(store, seeded, now):
+    # tt0080421 is friend-a's; share it with friend-b so it has a mixed author set; add an author-less item
+    shared = seeded.get_item_by_guid("imdb://tt0080421")
+    seeded.conn.execute(
+        "INSERT INTO item_authors (item_id, author_hash, first_seen, last_seen) VALUES (?,?,?,?)",
+        (shared.id, "friend-b", T, T))
+    seeded.conn.execute(
+        "INSERT INTO items (guid,type,title,raw_title,first_seen,last_seen,status,status_changed_at)"
+        " VALUES ('own:1','movie','Own','Own','2026-11-01T00:00:00+00:00','2026-11-01T00:00:00+00:00','review','2026-11-01T00:00:00+00:00')")
+    total = len(_ids(seeded))
+    assert total == 6
+    seeded.set_author_monitored("friend-a", False)
+    visible = _ids(seeded)
+    assert "imdb://tt0080421" in visible and "own:1" in visible  # mixed and author-less stay
+    assert "imdb://tt1558972" not in visible and "imdb://tt26446278" not in visible  # only friend-a
+    assert len(visible) == 4
+    assert len(_ids(seeded, monitored_only=False)) == total
+    assert sum(seeded.counts_by_status().values()) == 4
+    assert sum(seeded.counts_by_status(monitored_only=False).values()) == total
+    by_author = seeded.count_by_author(ItemFilter())
+    assert by_author.get("friend-b") == 3 and by_author.get("friend-a") == 1  # the shared item only
+    assert seeded.count_by_author(ItemFilter(monitored_only=False))["friend-a"] == 3
+    seeded.set_author_monitored("friend-b", False)
+    assert "imdb://tt0080421" not in _ids(seeded) and "own:1" in _ids(seeded)
+    seeded.set_author_monitored("friend-a", True)
+    assert "imdb://tt1558972" in _ids(seeded)
+    assert {a.hash: a.monitored for a in seeded.list_authors()} == {"friend-a": True, "friend-b": False}

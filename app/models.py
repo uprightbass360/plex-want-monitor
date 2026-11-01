@@ -88,6 +88,7 @@ class Author:
     display_name: str | None = None
     avatar_url: str | None = None
     resolved_at: datetime | None = None
+    monitored: bool = True
 
     @property
     def name(self) -> str:
@@ -130,6 +131,7 @@ class ItemFilter:
     author: str | None = None
     in_feed: bool | None = None
     sort: str = "newest"
+    monitored_only: bool = True  # hide items whose every author is unmonitored
 
 
 def _iso_out(dt: datetime | None) -> str | None:

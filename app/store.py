@@ -31,6 +31,16 @@ def _author(r) -> Author:
     return Author(
         r["hash"], r["label"], r["n"], from_iso(r["last_seen"]),
         r["username"], r["display_name"], r["avatar_url"], from_iso(r["resolved_at"]),
+        bool(r["monitored"]),
+    )
+
+
+def _visible(alias: str = "items") -> str:
+    """SQL predicate for items shown by default: no authors at all, or at least one monitored author."""
+    return (
+        f"(NOT EXISTS (SELECT 1 FROM item_authors va WHERE va.item_id={alias}.id)"
+        f" OR EXISTS (SELECT 1 FROM item_authors vb JOIN authors vu ON vu.hash=vb.author_hash"
+        f" WHERE vb.item_id={alias}.id AND vu.monitored=1))"
     )
 
 
@@ -171,6 +181,8 @@ class Store:
         if f.in_feed is not None:
             where.append("in_feed=?")
             params.append(int(f.in_feed))
+        if f.monitored_only:
+            where.append(_visible("items"))
         order = _ORDER.get(f.sort)
         if order is None:
             raise ValueError(f"unknown sort {f.sort!r}")
@@ -189,14 +201,17 @@ class Store:
         if f.in_feed is not None:
             where.append("i.in_feed=?")
             params.append(int(f.in_feed))
+        if f.monitored_only:
+            where.append(_visible("i"))
         sql = "SELECT ia.author_hash AS h, COUNT(*) AS n FROM item_authors ia JOIN items i ON i.id=ia.item_id"
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " GROUP BY ia.author_hash"
         return {r["h"]: r["n"] for r in self.conn.execute(sql, params)}
 
-    def counts_by_status(self) -> dict[str, int]:
-        rows = self.conn.execute("SELECT status, COUNT(*) AS n FROM items GROUP BY status")
+    def counts_by_status(self, monitored_only: bool = True) -> dict[str, int]:
+        where = f" WHERE {_visible('items')}" if monitored_only else ""
+        rows = self.conn.execute(f"SELECT status, COUNT(*) AS n FROM items{where} GROUP BY status")
         return {r["status"]: r["n"] for r in rows}
 
     # authors
@@ -205,7 +220,7 @@ class Store:
         if not item_ids:
             return out
         rows = self.conn.execute(
-            f"SELECT ia.item_id, a.hash, a.label, a.last_seen, a.username, a.display_name, a.avatar_url, a.resolved_at,"
+            f"SELECT ia.item_id, a.hash, a.label, a.last_seen, a.username, a.display_name, a.avatar_url, a.resolved_at, a.monitored,"
             f" (SELECT COUNT(*) FROM item_authors x WHERE x.author_hash=a.hash) AS n"
             f" FROM item_authors ia JOIN authors a ON a.hash=ia.author_hash"
             f" WHERE ia.item_id IN ({','.join('?' * len(item_ids))}) ORDER BY a.hash",
@@ -217,13 +232,16 @@ class Store:
 
     def list_authors(self) -> list[Author]:
         rows = self.conn.execute(
-            "SELECT a.hash, a.label, a.last_seen, a.username, a.display_name, a.avatar_url, a.resolved_at, COUNT(ia.item_id) AS n FROM authors a"
+            "SELECT a.hash, a.label, a.last_seen, a.username, a.display_name, a.avatar_url, a.resolved_at, a.monitored, COUNT(ia.item_id) AS n FROM authors a"
             " LEFT JOIN item_authors ia ON ia.author_hash=a.hash GROUP BY a.hash ORDER BY a.hash"
         )
         return [_author(r) for r in rows]
 
     def set_author_label(self, hash: str, label: str | None) -> None:
         self.conn.execute("UPDATE authors SET label=? WHERE hash=?", (label or None, hash))
+
+    def set_author_monitored(self, hash: str, monitored: bool) -> None:
+        self.conn.execute("UPDATE authors SET monitored=? WHERE hash=?", (int(monitored), hash))
 
     def set_author_identity(
         self, hash: str, username: str | None, display_name: str | None, avatar_url: str | None, now: datetime

@@ -232,3 +232,7 @@ code { font: 12px ui-monospace, monospace; color: var(--text); }
 .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: 0 0 28px; background: var(--border, #ccc); display: inline-block; }
 .avatar-sm { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; vertical-align: -3px; }
 .fname { font-weight: 600; }
+
+/* ---- monitor toggle in the Friends card ---- */
+.monitor-form { display: flex; margin: 0; }
+.friend-row.muted { font-size: inherit; opacity: 0.6; }

@@ -46,6 +46,9 @@ CREATE TABLE watchlist_guids (rating_key TEXT PRIMARY KEY, guid TEXT NOT NULL, f
     """
 ALTER TABLE watchlist_guids ADD COLUMN watchlisted_at TEXT;
 """,
+    """
+ALTER TABLE authors ADD COLUMN monitored INTEGER NOT NULL DEFAULT 1;
+""",
 ]
 
 

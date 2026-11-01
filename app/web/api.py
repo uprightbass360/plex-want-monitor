@@ -70,7 +70,7 @@ def _csv(value: str | None) -> tuple[str, ...]:
     return tuple(p.strip() for p in (value or "").split(",") if p.strip())
 
 
-def _build_filter(status, type, q, author, in_feed, sort) -> ItemFilter | JSONResponse:
+def _build_filter(status, type, q, author, in_feed, sort, include_unmonitored=False) -> ItemFilter | JSONResponse:
     statuses = _csv(status)
     if any(st not in STATUSES for st in statuses):
         return _error(422, "unknown status")
@@ -84,7 +84,8 @@ def _build_filter(status, type, q, author, in_feed, sort) -> ItemFilter | JSONRe
         in_feed = True
     if sort is None:
         sort = "queue" if statuses == ("queued",) else "newest"
-    return ItemFilter(statuses, type or None, q or None, author or None, in_feed, sort)
+    return ItemFilter(statuses, type or None, q or None, author or None, in_feed, sort,
+                      monitored_only=not include_unmonitored)
 
 
 @router.get("/api/items")
@@ -96,9 +97,10 @@ def list_items(
     author: str | None = None,
     in_feed: bool | None = None,
     sort: str | None = None,
+    include_unmonitored: bool = False,
 ):
     store = request.app.state.store
-    f = _build_filter(status, type, q, author, in_feed, sort)
+    f = _build_filter(status, type, q, author, in_feed, sort, include_unmonitored)
     if isinstance(f, JSONResponse):
         return f
     items = store.list_items(f)
@@ -191,6 +193,7 @@ _DEFAULTS = DEFAULTS
 class Friend(BaseModel):
     hash: str
     label: str | None = None
+    monitored: bool | None = None
 
 
 class SettingsBody(BaseModel):
@@ -213,7 +216,7 @@ def _settings_view(store) -> dict:
             {
                 "hash": a.hash, "label": a.label, "username": a.username,
                 "display_name": a.display_name, "avatar_url": a.avatar_url,
-                "name": a.name, "item_count": a.item_count,
+                "name": a.name, "item_count": a.item_count, "monitored": a.monitored,
             }
             for a in store.list_authors()
         ],
@@ -235,7 +238,10 @@ def put_settings(request: Request, body: SettingsBody):
         if value is not None:
             store.set_setting(key, value)
     for friend in body.friends or []:
-        store.set_author_label(friend.hash, friend.label)
+        if "label" in friend.model_fields_set:
+            store.set_author_label(friend.hash, friend.label)
+        if friend.monitored is not None:
+            store.set_author_monitored(friend.hash, friend.monitored)
     return _settings_view(store)
 
 
