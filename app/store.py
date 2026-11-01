@@ -217,6 +217,8 @@ class Store:
 
     def skip(self, item_id: int, now: datetime) -> Item:
         with self._tx():
+            if self.get_item(item_id) is None:
+                raise KeyError(item_id)
             self.conn.execute(
                 "UPDATE items SET queue_order=? WHERE id=?", (self._next_queue_order(), item_id)
             )

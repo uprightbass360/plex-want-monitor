@@ -16,6 +16,10 @@ COMMUNITY_TIMEOUT = 10.0
 _QUERY = "query($id: ID!) { user(id: $id) { id username displayName avatar } }"
 
 
+class PlexCommunityUserError(PlexError):
+    """community.plex.tv answered, but with a GraphQL error for this one user."""
+
+
 @dataclass(frozen=True)
 class CommunityUser:
     id: str
@@ -55,7 +59,7 @@ class PlexCommunity:
         if not isinstance(body, dict):
             raise PlexError("community.plex.tv returned an unexpected response")
         if body.get("errors"):
-            raise PlexError("community.plex.tv reported a GraphQL error")
+            raise PlexCommunityUserError("community.plex.tv reported a GraphQL error")
         data = body.get("data")
         u = data.get("user") if isinstance(data, dict) else None
         if not isinstance(u, dict):
@@ -69,7 +73,8 @@ class PlexCommunity:
 
 
 def resolve_authors(store, auth, now: datetime) -> int:
-    """Resolve unresolved friends. Stops at the first PlexError; those stay unresolved for retry."""
+    """Resolve unresolved friends. A per-user GraphQL error marks that user resolved with no identity;
+    a transport or HTTP error stops the pass and the rest stay unresolved for retry."""
     client = auth.community_client()
     if client is None:
         return 0
@@ -77,6 +82,9 @@ def resolve_authors(store, auth, now: datetime) -> int:
     for h in store.unresolved_authors():
         try:
             u = client.user(h)
+        except PlexCommunityUserError as exc:
+            log.warning("friend identity lookup returned an error: %s", exc)
+            u = None
         except PlexError as exc:
             log.warning("friend identity lookup failed: %s", exc)
             break

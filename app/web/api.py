@@ -79,7 +79,8 @@ def _build_filter(status, type, q, author, in_feed, sort) -> ItemFilter | JSONRe
         return _error(422, "unknown sort")
     if not statuses:
         statuses = ("review",)
-        in_feed = True if in_feed is None else in_feed
+    if statuses == ("review",) and in_feed is None:  # same as the Review tab
+        in_feed = True
     if sort is None:
         sort = "queue" if statuses == ("queued",) else "newest"
     return ItemFilter(statuses, type or None, q or None, author or None, in_feed, sort)
@@ -156,9 +157,15 @@ def set_status(request: Request, item_id: int, body: StatusBody):
 @router.post("/api/items/{item_id}/skip")
 def skip_item(request: Request, item_id: int):
     store = request.app.state.store
-    if store.get_item(item_id) is None:
+    item = store.get_item(item_id)
+    if item is None:
         return _error(404, "item not found")
-    return _item_dict(store, store.skip(item_id, _now()))
+    if item.status != "queued":
+        return _error(409, "only queued items can be skipped")
+    try:
+        return _item_dict(store, store.skip(item_id, _now()))
+    except KeyError:
+        return _error(404, "item not found")
 
 
 @router.post("/api/items/{item_id}/not-a-match")
@@ -252,7 +259,10 @@ def _plex_call(fn):
 
 @router.post("/api/plex/pin")
 def plex_pin_start(request: Request):
-    pin = request.app.state.auth.start_pin()
+    try:
+        pin = request.app.state.auth.start_pin()
+    except PlexError as exc:
+        return _error(502, str(exc))
     return {"code": pin.code, "expires_at": pin.expires_at.isoformat()}
 
 

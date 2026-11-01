@@ -52,6 +52,8 @@ Item responses never include the Plex token or the feed URL.
 - `POST /api/feed/fetch`, `POST /api/plex/scan`
 - `POST /api/plex/pin`, `GET /api/plex/pin`, `GET /api/plex/servers`,
   `POST /api/plex/server`, `POST /api/plex/reconnect`, `POST /api/plex/signout`
+- `GET /api/plex/libraries` (the selected server's libraries: key, type, title)
+- `POST /api/friends/resolve` (look up friend names and avatars from Plex now)
 - `GET /api/settings`, `PUT /api/settings` (the feed URL is masked except its
   last four characters)
 

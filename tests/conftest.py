@@ -230,12 +230,16 @@ class FakeCommunity:
     def __init__(self):
         self.users = {}
         self.fail = False
+        self.user_errors = set()
 
     def user(self, user_id):
         from app.plex_client import PlexError
+        from app.plex_community import PlexCommunityUserError
 
         if self.fail:
             raise PlexError("community unavailable")
+        if user_id in self.user_errors:
+            raise PlexCommunityUserError("community.plex.tv reported a GraphQL error")
         return self.users.get(user_id)
 
 

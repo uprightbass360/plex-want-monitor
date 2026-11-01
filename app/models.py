@@ -164,6 +164,7 @@ def item_to_dict(item: Item, authors: list[Author]) -> dict:
         "plex_rating_key": item.plex_rating_key,
         "plex_library_key": item.plex_library_key,
         "plex_library_name": item.plex_library_name,
+        "plex_library": item.plex_library_name,  # spec name; alias of plex_library_name
         "plex_machine_id": item.plex_machine_id,
         "match_method": item.match_method,
         "matched_at": _iso_out(item.matched_at),

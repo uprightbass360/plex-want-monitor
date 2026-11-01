@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.plex_client import PlexError
-from app.plex_community import CommunityUser, PlexCommunity, resolve_authors
+from app.plex_community import CommunityUser, PlexCommunity, PlexCommunityUserError, resolve_authors
 
 
 def make(handler):
@@ -36,8 +36,9 @@ def test_http_500_and_graphql_errors_and_transport_raise_plexerror():
     with pytest.raises(PlexError) as e:
         make(lambda r: httpx.Response(500)).user("x")
     assert "tok-secret" not in str(e.value)
-    with pytest.raises(PlexError):
+    with pytest.raises(PlexCommunityUserError) as e:
         make(lambda r: httpx.Response(200, json={"errors": [{"message": "bad tok-secret"}]})).user("x")
+    assert isinstance(e.value, PlexError) and "tok-secret" not in str(e.value)
 
     def boom(request):
         raise httpx.ConnectError("tok-secret")
@@ -62,3 +63,12 @@ def test_resolve_stops_on_error_and_skips_signed_out(store, seeded, fake_communi
     assert len(store.unresolved_authors()) == 2
     plex_auth.signout()
     assert resolve_authors(store, plex_auth, now) == 0
+
+
+def test_resolve_graphql_error_marks_user_and_continues(store, seeded, fake_community, signed_in_auth, now):
+    fake_community.users = {"friend-b": CommunityUser("friend-b", "bob", "", None)}
+    fake_community.user_errors = {"friend-a"}
+    assert resolve_authors(store, signed_in_auth, now) == 2
+    a = {x.hash: x for x in store.list_authors()}
+    assert a["friend-a"].username is None and a["friend-a"].resolved_at == now
+    assert a["friend-b"].username == "bob"

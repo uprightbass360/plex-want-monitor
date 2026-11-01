@@ -1,3 +1,6 @@
+from app.models import ItemFilter
+
+
 def _ids(client, **params):
     return [i["id"] for i in client.get("/api/items", params=params).json()["items"]]
 
@@ -156,3 +159,42 @@ def test_stale_status_maps_to_409(client, seeded, store, monkeypatch):
     assert r.status_code == 409 and r.json() == {"error": "status changed, reload"}
     r = client.post(f"/fragments/items/{iid}/status", data={"status": "queued", "tab": "review"})
     assert r.status_code == 409 and "status changed, reload" in r.text
+
+
+def test_plex_pin_start_error_is_502(client, fake_plextv):
+    from app.plex_client import PlexError
+
+    def down():
+        raise PlexError("plex.tv down")
+
+    fake_plextv.create_pin = down
+    r = client.post("/api/plex/pin")
+    assert r.status_code == 502 and r.json() == {"error": "plex.tv down"}
+
+
+def test_skip_requires_queued(client, seeded, store):
+    iid = _ids(client)[0]
+    r = client.post(f"/api/items/{iid}/skip")
+    assert r.status_code == 409 and "error" in r.json()
+
+
+def test_store_skip_unknown_raises_keyerror(store, now):
+    import pytest
+
+    with pytest.raises(KeyError):
+        store.skip(99999, now)
+
+
+def test_status_review_defaults_to_in_feed(client, seeded, store, now):
+    iid = _ids(client)[0]
+    store.mark_left_feed({i.guid for i in store.list_items(ItemFilter()) if i.id != iid}, now)
+    assert iid not in _ids(client, status="review")
+    assert _ids(client, status="review", in_feed="false") == [iid]
+    assert iid in _ids(client, status="review,queued")
+
+
+def test_item_dict_has_plex_library_alias(client, seeded, store, now):
+    iid = _ids(client)[0]
+    store.set_match(iid, "1", "2", "Movies", "mach", "guid", now); store.set_status(iid, "library", now)
+    d = client.get("/api/items", params={"status": "library"}).json()["items"][0]
+    assert d["plex_library"] == d["plex_library_name"] == "Movies"
