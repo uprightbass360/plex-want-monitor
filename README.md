@@ -4,6 +4,8 @@ A small dashboard that watches a Plex Friends' Watchlist RSS feed, checks your
 Plex Media Server for titles you already own, and keeps a queue of what is
 still missing. It is a FastAPI app with a SQLite database, served on one port.
 
+![Review tab: watchlist items with posters, type, watchlist age, Queue and Ignore actions](assets/review-tab.png)
+
 ## Run
 
 ```bash
