@@ -1,0 +1,171 @@
+/* Want Monitor: dark, compact, one gold accent. */
+:root {
+  --bg: #15171c;
+  --panel: #1e2128;
+  --panel-raised: #22252d;
+  --line: #2c303a;
+  --line-soft: #22252d;
+  --control: #3a3f4b;
+  --text: #e6e6e6;
+  --text-strong: #ffffff;
+  --text-dim: #aab;
+  --text-muted: #889;
+  --text-faint: #778;
+  --accent: #f5c542;
+  --accent-ink: #15171c;
+  --movie-bg: #3b2f4e;
+  --movie-fg: #d6b4ff;
+  --show-bg: #2a3d57;
+  --show-fg: #9fc4ff;
+  --queue-bg: #2d4f7d;
+  --ok-bg: #2e7d4f;
+  --warn-bg: #5a3a1a;
+  --warn-fg: #ffd9a8;
+  --error-fg: #ff9b8f;
+  --bulk-bg: #2a2d1f;
+  --bulk-line: #4a4a2a;
+  --bulk-fg: #f5e9b0;
+  --radius: 6px;
+  --row-cols: 24px 44px minmax(0, 1fr) 90px 130px 230px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+
+/* ---- header ---- */
+.topbar {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand {
+  font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+  color: var(--accent); text-decoration: none;
+}
+.tabs { display: flex; gap: 4px; }
+.tab {
+  padding: 6px 10px; border-radius: var(--radius);
+  color: var(--text-dim); text-decoration: none;
+}
+.tab:hover { color: var(--text-strong); }
+.tab.active { background: var(--line); color: var(--text-strong); }
+.tab .n {
+  margin-left: 6px; padding: 0 7px; border-radius: 10px;
+  background: var(--control); color: #dde; font-size: 12px;
+}
+.status {
+  margin-left: auto; display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: #9aa;
+}
+.status .sep { color: var(--text-faint); }
+.warn-text { color: var(--accent); }
+.err-text {
+  color: var(--error-fg); max-width: 28ch;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---- flash ---- */
+.flash:empty { display: none; }
+.flash-msg {
+  padding: 8px 18px; background: var(--warn-bg); color: var(--warn-fg);
+  border-bottom: 1px solid var(--line); font-size: 13px;
+}
+
+/* ---- toolbar ---- */
+.toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 18px; border-bottom: 1px solid var(--line);
+  font-size: 13px; color: var(--text-dim);
+}
+.chips { display: flex; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; cursor: pointer;
+  padding: 3px 10px; border: 1px solid var(--control); border-radius: 14px;
+  text-decoration: none;
+}
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip:has(input:checked), .chip.on {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600;
+}
+.chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field { display: inline-flex; align-items: center; gap: 6px; }
+select, .search {
+  background: var(--bg); border: 1px solid var(--control);
+  border-radius: var(--radius); padding: 4px 8px;
+}
+.search { margin-left: auto; width: 220px; }
+.search::placeholder { color: var(--text-faint); }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-block; cursor: pointer; white-space: nowrap;
+  padding: 5px 10px; border: 1px solid var(--control); border-radius: 5px;
+  background: var(--panel-raised); color: #dde;
+  font-size: 12px; text-decoration: none;
+}
+.btn:hover { border-color: var(--text-faint); }
+.btn:disabled, .btn.htmx-request { opacity: .6; cursor: progress; }
+.btn.q { background: var(--queue-bg); border-color: var(--queue-bg); color: #fff; }
+.btn.ok { background: var(--ok-bg); border-color: var(--ok-bg); color: #fff; }
+.btn.warn { background: var(--warn-bg); border-color: var(--warn-bg); color: var(--warn-fg); }
+.btn.prominent { font-weight: 600; box-shadow: 0 0 0 1px var(--accent); }
+.btn.ghost { background: transparent; }
+
+/* ---- bulk bar ---- */
+.bulk-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px; background: var(--bulk-bg); border-bottom: 1px solid var(--bulk-line);
+  font-size: 13px; color: var(--bulk-fg);
+}
+.bulk-bar[hidden] { display: none; }
+.bulk-bar .hint { margin-left: auto; color: var(--text-faint); font-size: 12px; }
+
+/* ---- rows ---- */
+.row {
+  display: grid; grid-template-columns: var(--row-cols); gap: 14px; align-items: center;
+  padding: 8px 18px; border-bottom: 1px solid var(--line-soft);
+}
+.row.head {
+  padding: 6px 18px; font-size: 11px; letter-spacing: .6px;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.row.gone { opacity: .6; }
+.row:has(.row-check:checked) { background: #1a1d24; }
+.row-check, #check-all { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.poster {
+  width: 44px; height: 64px; overflow: hidden; border-radius: 4px;
+  background: linear-gradient(160deg, var(--control), #262a33);
+}
+.poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.info { min-width: 0; }
+.title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title small { margin-left: 6px; color: var(--text-muted); font-weight: 400; }
+.sub { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+.sub a { text-decoration: none; }
+.sub a:hover { color: var(--accent); }
+.badge {
+  display: inline-block; padding: 2px 7px; border-radius: 4px;
+  background: var(--line); color: #cdd; font-size: 11px;
+}
+.badge.movie { background: var(--movie-bg); color: var(--movie-fg); }
+.badge.show { background: var(--show-bg); color: var(--show-fg); }
+.muted { color: var(--text-faint); font-size: 12px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.empty, .notice { padding: 28px 18px; color: var(--text-muted); text-align: center; }
+.notice { padding: 8px 18px; color: var(--warn-fg); }
+
+/* ---- copy-to-clipboard (used by the Queue tab) ---- */
+[data-copy] { cursor: copy; }
+[data-copy].copied { border-color: var(--ok-bg); }
+
+@media (max-width: 760px) {
+  :root { --row-cols: 24px 44px minmax(0, 1fr); }
+  .row > :nth-child(n+4) { grid-column: 3; }
+  .row.head { display: none; }
+  .search { margin-left: 0; width: 100%; }
+  .status { margin-left: 0; }
+}

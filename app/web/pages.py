@@ -1,0 +1,292 @@
+"""HTML pages and htmx fragments for the list tabs."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Annotated
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from app.lifecycle import InvalidTransition, apply_not_a_match, apply_owner_transition
+from app.models import ItemFilter, item_to_dict
+
+router = APIRouter()
+
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+
+NOT_A_MATCH = "not-a-match"
+LIST_SORTS = ("newest", "oldest", "title")
+ROWS_PARTS = ["partials/rows.html", "partials/json_link.html"]
+
+
+@dataclass(frozen=True)
+class Action:
+    label: str
+    status: str  # target status, or NOT_A_MATCH
+    style: str = ""
+
+
+@dataclass(frozen=True)
+class Tab:
+    key: str
+    label: str
+    statuses: tuple[str, ...]
+    actions: tuple[Action, ...]
+    empty: str
+
+
+TABS: dict[str, Tab] = {
+    t.key: t
+    for t in (
+        Tab("review", "Review", ("review",),
+            (Action("Queue", "queued", "q"), Action("Ignore", "ignored", "warn")),
+            "Nothing to review. New watchlist items show up here."),
+        Tab("grabbed", "Grabbed", ("grabbed",), (Action("Undo", "queued"),),
+            "Nothing grabbed and waiting. Items move to In library once Plex has them."),
+        Tab("library", "In library", ("library",), (Action("Not a match", NOT_A_MATCH),),
+            "Nothing matched in Plex yet."),
+        Tab("ignored", "Ignored", ("ignored",), (Action("Unignore", "review"),),
+            "Nothing ignored."),
+    )
+}
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def ago(dt: datetime | None, now: datetime) -> str:
+    if dt is None:
+        return "never"
+    secs = int((now - dt).total_seconds())
+    if secs < 60:
+        return "just now"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins} min ago"
+    hours = mins // 60
+    if hours < 48:
+        return f"{hours} h ago"
+    days = hours // 24
+    if days < 14:
+        return f"{days} days ago"
+    if days < 60:
+        return f"{days // 7} weeks ago"
+    return f"{days // 30} months ago"
+
+
+templates.env.filters["ago"] = ago
+
+
+# ---- view-model helpers ----
+
+
+def _tab(key: str | None) -> Tab:
+    tab = TABS.get(key or "")
+    if tab is None:
+        raise HTTPException(404, "unknown tab")
+    return tab
+
+
+@dataclass(frozen=True)
+class Filters:
+    type: str = "all"
+    q: str = ""
+    author: str = ""
+    show_removed: bool = False
+    sort: str = "newest"
+
+    def query(self, **overrides) -> str:
+        """Query string for this tab's page URL, with overrides applied."""
+        values = {
+            "type": self.type, "q": self.q, "author": self.author,
+            "show_removed": "1" if self.show_removed else "", "sort": self.sort,
+        }
+        values.update(overrides)
+        defaults = {"type": "all", "sort": "newest"}
+        return urlencode({k: v for k, v in values.items() if v and defaults.get(k) != v})
+
+
+def _filters(type=None, q=None, author=None, show_removed=None, sort=None) -> Filters:
+    type = type or "all"
+    sort = sort or "newest"
+    if type not in ("all", "movie", "show"):
+        raise HTTPException(422, "type must be all, movie or show")
+    if sort not in LIST_SORTS:
+        raise HTTPException(422, "unknown sort")
+    return Filters(type, (q or "").strip(), author or "", show_removed == "1", sort)
+
+
+def _item_filter(tab: Tab, f: Filters) -> ItemFilter:
+    in_feed = True if tab.key == "review" and not f.show_removed else None
+    return ItemFilter(tab.statuses, None if f.type == "all" else f.type, f.q or None,
+                      f.author or None, in_feed, f.sort)
+
+
+def _json_href(tab: Tab, f: Filters) -> str:
+    params = {"status": ",".join(tab.statuses)}
+    if tab.key == "review" and not f.show_removed:
+        params["in_feed"] = "true"
+    if f.type != "all":
+        params["type"] = f.type
+    params.update({k: v for k, v in (("q", f.q), ("author", f.author)) if v})
+    params["sort"] = f.sort
+    return "/api/items?" + urlencode(params)
+
+
+def _counts(store) -> dict[str, int]:
+    by_status = store.counts_by_status()
+    counts = {key: sum(by_status.get(s, 0) for s in tab.statuses) for key, tab in TABS.items()}
+    counts["review"] = len(store.list_items(ItemFilter(("review",), in_feed=True)))
+    return counts
+
+
+def _rows(store, items) -> list[dict]:
+    authors = store.authors_for([i.id for i in items])
+    return [
+        {**item_to_dict(i, authors.get(i.id, [])), "since": i.pub_date or i.first_seen} for i in items
+    ]
+
+
+def _header_status(store) -> dict:
+    fetch, scan = store.last_fetch(), store.last_scan()
+    errors = [log.error for log in (fetch, scan) if log and not log.ok and log.error]
+    return {
+        "fetched_at": fetch.finished_at if fetch else None,
+        "scanned_at": scan.finished_at if scan else None,
+        "truncated": bool(fetch and fetch.truncated),
+        "errors": errors,
+    }
+
+
+def _context(request: Request, tab: Tab, f: Filters, **extra) -> dict:
+    store = request.app.state.store
+    return {
+        "tab": tab, "tabs": TABS, "f": f, "now": _now(),
+        "counts": _counts(store),
+        "json_href": _json_href(tab, f),
+        "authors": {a.hash: a.label for a in store.list_authors()},
+        **extra,
+    }
+
+
+def _list_context(request: Request, tab: Tab, f: Filters, **extra) -> dict:
+    store = request.app.state.store
+    rows = _rows(store, store.list_items(_item_filter(tab, f)))
+    return _context(request, tab, f, rows=rows, **extra)
+
+
+def _render(names: list[str], ctx: dict, **extra) -> HTMLResponse:
+    """Concatenate several templates into one response (main content plus out-of-band parts)."""
+    ctx = {**ctx, **extra}
+    return HTMLResponse("".join(templates.get_template(n).render(ctx) for n in names))
+
+
+def _error_fragment(request: Request, code: int, message: str) -> HTMLResponse:
+    response = templates.TemplateResponse(
+        request, "partials/error.html", {"message": message}, status_code=code
+    )
+    response.headers["HX-Retarget"] = "#flash"
+    response.headers["HX-Reswap"] = "innerHTML"
+    return response
+
+
+def _apply(store, item_id: int, target: str):
+    if target == NOT_A_MATCH:
+        return apply_not_a_match(store, item_id, _now())
+    return apply_owner_transition(store, item_id, target, _now())
+
+
+def _row_response(request: Request, tab: Tab, item_id: int, target: str) -> HTMLResponse:
+    store = request.app.state.store
+    try:
+        item = _apply(store, item_id, target)
+    except KeyError:
+        return _error_fragment(request, 404, "That item no longer exists.")
+    except InvalidTransition as exc:
+        return _error_fragment(request, 409, str(exc))
+    ctx = _context(request, tab, Filters())
+    names = ["partials/row.html"] if item.status in tab.statuses else []
+    return _render([*names, "partials/counts.html"], ctx, row=_rows(store, [item])[0], oob=True)
+
+
+# ---- routes ----
+
+Text = Annotated[str | None, Form()]
+
+
+@router.get("/")
+def root():
+    return RedirectResponse("/review", status_code=302)
+
+
+@router.get("/fragments/header-status", response_class=HTMLResponse)
+def header_status(request: Request):
+    return templates.TemplateResponse(
+        request, "partials/header_status.html",
+        {"status": _header_status(request.app.state.store), "now": _now()},
+    )
+
+
+@router.post("/fragments/refresh", response_class=HTMLResponse)
+async def refresh(request: Request):
+    scheduler = request.app.state.scheduler
+    await scheduler.fetch_now()
+    await scheduler.scan_now()
+    response = header_status(request)
+    response.headers["HX-Trigger"] = "wm-refreshed"
+    return response
+
+
+@router.get("/fragments/{tab_key}/rows", response_class=HTMLResponse)
+def rows_fragment(request: Request, tab_key: str, type: str | None = None, q: str | None = None,
+                  author: str | None = None, show_removed: str | None = None, sort: str | None = None):
+    tab = _tab(tab_key)
+    f = _filters(type, q, author, show_removed, sort)
+    response = _render(ROWS_PARTS, _list_context(request, tab, f), oob=True)
+    query = f.query()
+    response.headers["HX-Push-Url"] = f"/{tab.key}" + (f"?{query}" if query else "")
+    return response
+
+
+@router.post("/fragments/items/bulk", response_class=HTMLResponse)
+def bulk(request: Request, status: Annotated[str, Form()], tab: Annotated[str, Form()],
+         ids: Annotated[list[int] | None, Form()] = None, type: Text = None, q: Text = None,
+         author: Text = None, show_removed: Text = None, sort: Text = None):
+    current = _tab(tab)
+    f = _filters(type, q, author, show_removed, sort)
+    store = request.app.state.store
+    skipped = 0
+    for item_id in ids or []:
+        try:
+            _apply(store, item_id, status)
+        except (KeyError, InvalidTransition):
+            skipped += 1
+    ctx = _list_context(request, current, f, skipped=skipped)
+    return _render([*ROWS_PARTS, "partials/counts.html"], ctx, oob=True)
+
+
+@router.post("/fragments/items/{item_id}/status", response_class=HTMLResponse)
+def status_fragment(request: Request, item_id: int, status: Annotated[str, Form()],
+                    tab: Annotated[str, Form()]):
+    return _row_response(request, _tab(tab), item_id, status)
+
+
+@router.post("/fragments/items/{item_id}/not-a-match", response_class=HTMLResponse)
+def not_a_match_fragment(request: Request, item_id: int, tab: Annotated[str, Form()] = "library"):
+    return _row_response(request, _tab(tab), item_id, NOT_A_MATCH)
+
+
+# Keep last: the catch-all tab route would shadow any single-segment path below it.
+@router.get("/{tab_key}", response_class=HTMLResponse)
+def list_page(request: Request, tab_key: str, type: str | None = None, q: str | None = None,
+              author: str | None = None, show_removed: str | None = None, sort: str | None = None):
+    tab = _tab(tab_key)
+    f = _filters(type, q, author, show_removed, sort)
+    status = _header_status(request.app.state.store)
+    return templates.TemplateResponse(request, "list.html", _list_context(request, tab, f, status=status))

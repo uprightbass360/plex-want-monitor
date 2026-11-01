@@ -1,0 +1,24 @@
+<div class="row{% if not row.in_feed %} gone{% endif %}" id="item-{{ row.id }}">
+  <input type="checkbox" class="row-check" name="ids" value="{{ row.id }}" aria-label="Select {{ row.title }}">
+  <div class="poster">{% if row.thumb %}<img src="{{ row.thumb }}" alt="" loading="lazy" width="44" height="64">{% endif %}</div>
+  <div class="info">
+    <div class="title">{{ row.title }}{% if row.year %}<small>{{ row.year }}</small>{% endif %}</div>
+    <div class="sub">
+      {%- for a in row.authors %}<a href="/{{ tab.key }}?author={{ a.hash|urlencode }}">{{ a.label or a.hash[:6] }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+      {%- if tab.key == "library" and row.plex_library_name %}<span> · {{ row.plex_library_name }}, matched by {{ row.match_method }}</span>{% endif %}
+      {%- if not row.in_feed %}<span> · left the watchlist</span>{% endif %}
+    </div>
+  </div>
+  <span><span class="badge {{ row.type }}">{{ "Movie" if row.type == "movie" else "Show" }}</span></span>
+  <span class="muted">{{ row.since|ago(now) }}</span>
+  <div class="actions">
+    {% for action in tab.actions %}
+    {% if action.status == "not-a-match" %}
+    <button type="button" class="btn{% if row.match_method == 'title' %} warn prominent{% endif %}" hx-post="/fragments/items/{{ row.id }}/not-a-match" hx-vals='{"tab": "{{ tab.key }}"}' hx-target="closest .row" hx-swap="outerHTML"{% if row.match_method == 'title' %} title="Matched by title only; check it is the right one"{% endif %}>Not a match</button>
+    {% else %}
+    <button type="button" class="btn {{ action.style }}" hx-post="/fragments/items/{{ row.id }}/status" hx-vals='{"status": "{{ action.status }}", "tab": "{{ tab.key }}"}' hx-target="closest .row" hx-swap="outerHTML">{{ action.label }}</button>
+    {% endif %}
+    {% endfor %}
+    {% if tab.key == "library" and row.plex_web_url %}<a class="btn" href="{{ row.plex_web_url }}" target="_blank" rel="noopener">Open in Plex</a>{% endif %}
+  </div>
+</div>

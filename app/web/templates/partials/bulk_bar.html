@@ -1,0 +1,8 @@
+<div id="bulk-bar" class="bulk-bar" hidden>
+  <span><span id="bulk-count">0</span> selected</span>
+  {% for action in tab.actions %}
+  <button type="button" class="btn {{ action.style }}" hx-post="/fragments/items/bulk" hx-vals='{"status": "{{ action.status }}"}' hx-include="#filters, .row-check:checked" hx-target="#rows">{{ action.label }}</button>
+  {% endfor %}
+  <button type="button" class="btn ghost" data-clear-selection>Clear</button>
+  <span class="hint">Esc to clear</span>
+</div>

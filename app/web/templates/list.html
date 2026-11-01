@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ tab.label }} · Want Monitor{% endblock %}
+{% block content %}
+<form id="filters" class="toolbar" hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="change" hx-target="#rows">
+  <input type="hidden" name="tab" value="{{ tab.key }}">
+  <div class="chips" role="radiogroup" aria-label="Type">
+    {% for value, label in (("all", "All"), ("movie", "Movies"), ("show", "Shows")) %}
+    <label class="chip"><input type="radio" name="type" value="{{ value }}"{% if f.type == value %} checked{% endif %}>{{ label }}</label>
+    {% endfor %}
+  </div>
+  {% if f.author %}
+  <input type="hidden" name="author" value="{{ f.author }}">
+  <a class="chip on" href="/{{ tab.key }}?{{ f.query(author='') }}" title="Show everyone">from {{ authors.get(f.author) or f.author[:6] }} &times;</a>
+  {% endif %}
+  <label class="field">Sort
+    <select name="sort">
+      {% for value, label in (("newest", "newest first"), ("oldest", "oldest first"), ("title", "title")) %}
+      <option value="{{ value }}"{% if f.sort == value %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if tab.key == "review" %}
+  <label class="field"><input type="checkbox" name="show_removed" value="1"{% if f.show_removed %} checked{% endif %}> show removed</label>
+  {% endif %}
+  <input class="search" type="search" name="q" value="{{ f.q }}" placeholder="search titles…" aria-label="Search titles"
+         hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="keyup changed delay:300ms" hx-target="#rows" hx-include="#filters">
+  {% include "partials/json_link.html" %}
+</form>
+{% include "partials/bulk_bar.html" %}
+<section class="list">
+  <div class="row head">
+    <input type="checkbox" id="check-all" aria-label="Select all">
+    <span></span><span>Title</span><span>Type</span><span>On watchlist since</span><span>Actions</span>
+  </div>
+  <div id="rows" hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="wm-refreshed from:body" hx-include="#filters">
+    {% include "partials/rows.html" %}
+  </div>
+</section>
+{% endblock %}

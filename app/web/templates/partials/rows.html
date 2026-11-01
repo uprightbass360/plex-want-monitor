@@ -1,0 +1,6 @@
+{% if skipped %}<div class="notice">{{ skipped }} item{{ "s" if skipped != 1 }} could not be changed.</div>{% endif %}
+{% for row in rows %}
+{% include "partials/row.html" %}
+{% else %}
+<div class="empty">{{ tab.empty }}</div>
+{% endfor %}

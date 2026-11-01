@@ -1,0 +1,8 @@
+<div id="header-status" class="status" hx-get="/fragments/header-status" hx-trigger="every 60s" hx-swap="outerHTML">
+  <span>feed {{ status.fetched_at|ago(now) }}</span>
+  <span class="sep">·</span>
+  <span>scan {{ status.scanned_at|ago(now) }}</span>
+  {% if status.truncated %}<span class="warn-text" title="The feed returned as many items as its cap; older items may be missing.">feed may be truncated</span>{% endif %}
+  {% for error in status.errors %}<span class="err-text" title="{{ error }}">{{ error }}</span>{% endfor %}
+  <button type="button" class="btn" hx-post="/fragments/refresh" hx-target="#header-status" hx-swap="outerHTML" hx-disabled-elt="this">Refresh now</button>
+</div>

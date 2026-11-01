@@ -1,0 +1,5 @@
+<nav id="tab-counts" class="tabs" hx-swap-oob="true">
+  {% for key, t in tabs.items() %}
+  <a class="tab{% if tab and tab.key == key %} active{% endif %}" href="/{{ key }}"{% if tab and tab.key == key %} aria-current="page"{% endif %}>{{ t.label }} <span class="n">{{ counts.get(key, 0) }}</span></a>
+  {% endfor %}
+</nav>

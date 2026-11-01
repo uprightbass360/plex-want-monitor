@@ -17,6 +17,7 @@ from app.poller import HttpxFeedFetcher
 from app.scheduler import Scheduler
 from app.store import Store
 from app.web.api import router as api_router
+from app.web.pages import router as pages_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -83,4 +84,5 @@ def create_app(
     app.state.scheduler = scheduler
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(api_router)
+    app.include_router(pages_router)
     return app
