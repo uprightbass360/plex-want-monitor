@@ -24,13 +24,16 @@
   {% endif %}
   <input class="search" type="search" name="q" value="{{ f.q }}" placeholder="search titles…" aria-label="Search titles"
          hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="keyup changed delay:300ms" hx-target="#rows" hx-include="#filters">
+  {% if tab.key == "grabbed" %}
+  <button type="button" class="btn" hx-post="/fragments/scan" hx-target="#header-status" hx-swap="outerHTML" hx-disabled-elt="this">Scan now</button>
+  {% endif %}
   {% include "partials/json_link.html" %}
 </form>
 {% include "partials/bulk_bar.html" %}
 <section class="list">
   <div class="row head">
     <input type="checkbox" id="check-all" aria-label="Select all">
-    <span></span><span>Title</span><span>Type</span><span>On watchlist since</span><span>Actions</span>
+    <span></span><span>Title</span><span>Type</span><span>{{ tab.age_label }}</span><span>Actions</span>
   </div>
   <div id="rows" hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="wm-refreshed from:body" hx-include="#filters">
     {% include "partials/rows.html" %}

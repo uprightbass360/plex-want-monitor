@@ -42,6 +42,8 @@ class Tab:
     page: str = "list.html"
     rows: str = "partials/rows.html"
     row: str = "partials/row.html"
+    age_label: str = "On watchlist since"
+    age_key: str = "since"  # key in the row dict holding the datetime shown in the age column
 
 
 TABS: dict[str, Tab] = {
@@ -53,9 +55,10 @@ TABS: dict[str, Tab] = {
         Tab(QUEUE, "Queue", ("queued",), (), "Nothing queued. Queue items from Review.",
             "queue.html", "partials/queue_rows.html", "partials/queue_row.html"),
         Tab("grabbed", "Grabbed", ("grabbed",), (Action("Undo", "queued"),),
-            "Nothing grabbed and waiting. Items move to In library once Plex has them."),
+            "Nothing grabbed and waiting. Items move to In library once Plex has them.",
+            age_label="Grabbed", age_key="changed_at"),
         Tab("library", "In library", ("library",), (Action("Not a match", NOT_A_MATCH),),
-            "Nothing matched in Plex yet."),
+            "Nothing matched in Plex yet.", age_label="Matched", age_key="matched_dt"),
         Tab("ignored", "Ignored", ("ignored",), (Action("Unignore", "review"),),
             "Nothing ignored."),
     )
@@ -159,10 +162,35 @@ def _counts(store) -> dict[str, int]:
     return counts
 
 
+def _not_rescanned(item, scan, selected) -> str | None:
+    """Why the latest scan could not confirm this library item's match, or None."""
+    if item.status != "library" or scan is None or not scan.machine_id:
+        return None
+    if item.plex_machine_id != scan.machine_id:
+        return "server changed"
+    if selected and item.plex_library_key not in selected:
+        return "library not selected"
+    entry = next((lib for lib in scan.libraries if lib.get("key") == item.plex_library_key), None)
+    if entry is not None and not entry.get("ok"):
+        return "library listing failed"
+    if entry is not None and entry.get("ok") and entry.get("count") == 0:
+        return "library listed empty"
+    return None
+
+
 def _rows(store, items) -> list[dict]:
     authors = store.authors_for([i.id for i in items])
+    scan = store.last_scan() if any(i.status == "library" for i in items) else None
+    selected = store.get_setting("selected_library_keys") or None
     return [
-        {**item_to_dict(i, authors.get(i.id, [])), "since": i.pub_date or i.first_seen} for i in items
+        {
+            **item_to_dict(i, authors.get(i.id, [])),
+            "since": i.pub_date or i.first_seen,
+            "changed_at": i.status_changed_at,
+            "matched_dt": i.matched_at,
+            "not_rescanned": _not_rescanned(i, scan, selected),
+        }
+        for i in items
     ]
 
 
@@ -250,11 +278,8 @@ def header_status(request: Request):
     )
 
 
-@router.post("/fragments/refresh", response_class=HTMLResponse)
-async def refresh(request: Request):
-    scheduler = request.app.state.scheduler
-    await scheduler.fetch_now()
-    await scheduler.scan_now()
+def _refreshed(request: Request) -> HTMLResponse:
+    """Header status plus out-of-band tab counts, and an event that reloads the visible cards and rows."""
     store = request.app.state.store
     path = urlparse(request.headers.get("HX-Current-URL", "")).path.strip("/")
     ctx = {
@@ -264,6 +289,20 @@ async def refresh(request: Request):
     response = _render(["partials/header_status.html", "partials/counts.html"], ctx)
     response.headers["HX-Trigger"] = "wm-refreshed"
     return response
+
+
+@router.post("/fragments/refresh", response_class=HTMLResponse)
+async def refresh(request: Request):
+    scheduler = request.app.state.scheduler
+    await scheduler.fetch_now()
+    await scheduler.scan_now()
+    return _refreshed(request)
+
+
+@router.post("/fragments/scan", response_class=HTMLResponse)
+async def scan(request: Request):
+    await request.app.state.scheduler.scan_now()
+    return _refreshed(request)
 
 
 @router.get("/fragments/{tab_key}/rows", response_class=HTMLResponse)
@@ -310,9 +349,13 @@ def skip_fragment(request: Request, item_id: int, tab: Annotated[str, Form()] = 
         return _error_fragment(request, 404, "That item no longer exists.")
     if item.status != "queued":
         return _error_fragment(request, 409, "Only queued items can be skipped.")
-    store.skip(item_id, _now())
-    ctx = _list_context(request, current, _filters(type, q, author))
-    return _render([current.rows], ctx)
+    item = store.skip(item_id, _now())
+    # Re-render only this row and move it to the end of #rows; other rows (faded done ones too) stay.
+    ctx = _context(request, current, _filters(type, q, author))
+    response = _render([current.row, "partials/oob_delete.html"], ctx, row=_rows(store, [item])[0], done=False)
+    response.headers["HX-Reswap"] = "beforeend"
+    response.headers["HX-Retarget"] = "#rows"
+    return response
 
 
 @router.post("/fragments/items/{item_id}/not-a-match", response_class=HTMLResponse)

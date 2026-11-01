@@ -3,14 +3,18 @@
   <div class="poster">{% if row.thumb %}<img src="{{ row.thumb }}" alt="" loading="lazy" width="44" height="64">{% endif %}</div>
   <div class="info">
     <div class="title">{{ row.title }}{% if row.year %}<small>{{ row.year }}</small>{% endif %}</div>
+    {% if row.status_note %}<div class="note muted"><small>{{ row.status_note }}</small></div>{% endif %}
     <div class="sub">
       {%- for a in row.authors %}<a href="/{{ tab.key }}?author={{ a.hash|urlencode }}">{% if a.avatar_url %}<img class="avatar-sm" src="{{ a.avatar_url }}" alt="" loading="lazy" width="16" height="16"> {% endif %}{{ a.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+      {%- if tab.key == "review" and row.keywords %}<span> · {{ row.keywords[:4]|join(", ") }}</span>{% endif %}
+      {%- if tab.key == "grabbed" %}<span> · grabbed {{ row.changed_at|ago(now) }}, not yet seen by Plex</span>{% endif %}
       {%- if tab.key == "library" and row.plex_library_name %}<span> · {{ row.plex_library_name }}, matched by {{ row.match_method }}</span>{% endif %}
+      {%- if tab.key == "library" and row.not_rescanned %}<span class="warn-text"> · not rescanned ({{ row.not_rescanned }})</span>{% endif %}
       {%- if not row.in_feed %}<span> · left the watchlist</span>{% endif %}
     </div>
   </div>
   <span><span class="badge {{ row.type }}">{{ "Movie" if row.type == "movie" else "Show" }}</span></span>
-  <span class="muted">{{ row.since|ago(now) }}</span>
+  <span class="muted">{{ row[tab.age_key]|ago(now) }}</span>
   <div class="actions">
     {% for action in tab.actions %}
     {% if action.status == "not-a-match" %}

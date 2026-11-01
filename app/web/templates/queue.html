@@ -14,7 +14,7 @@
   {% include "partials/json_link.html" %}
 </form>
 <section class="list">
-  <div id="rows" hx-get="/fragments/queue/rows" hx-trigger="wm-refreshed from:body" hx-include="#filters">
+  <div id="rows">
     {% include "partials/queue_rows.html" %}
   </div>
 </section>

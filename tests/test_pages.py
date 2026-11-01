@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from app.models import FetchLog, ItemFilter
 from app.poller import FetchResponse
 
@@ -176,7 +178,19 @@ def test_skip_reorders(client, seeded, store, now):
     ids = [i.id for i in store.list_items(ItemFilter(statuses=("review",)))][:2]
     for i in ids: store.set_status(i, "queued", now)
     r = client.post(f"/fragments/items/{ids[0]}/skip", data={"tab": "queue"})
-    assert r.text.index(f'data-item-id="{ids[1]}"') < r.text.index(f'data-item-id="{ids[0]}"')
+    assert r.status_code == 200 and r.text.count("data-item-id=") == 1
+    assert f'data-item-id="{ids[0]}"' in r.text and f'id="item-{ids[0]}"' in r.text
+    assert f'<div id="item-{ids[0]}" hx-swap-oob="delete"></div>' in r.text
+    assert r.headers["HX-Reswap"] == "beforeend" and r.headers["HX-Retarget"] == "#rows"
+    order = [i.id for i in store.list_items(ItemFilter(statuses=("queued",), sort="queue"))]
+    assert order == [ids[1], ids[0]]
+
+
+def test_queue_rows_do_not_reload_on_refresh(client, seeded, store, now):
+    _queue_two(store, now)
+    html = client.get("/queue").text
+    rows_div = html.split('id="rows"')[1].split(">")[0]
+    assert "wm-refreshed" not in rows_div
 
 
 def test_queue_page_header_json_and_no_secrets(client, seeded, store, now):
@@ -359,3 +373,68 @@ def test_friends_resolve_fragment_rerenders_card(client, signed_in_auth, seeded,
     fake_community.users = {"friend-a": CommunityUser("friend-a", "ann", "", None)}
     r = client.post("/fragments/settings/friends/resolve")
     assert r.status_code == 200 and 'id="friends-card"' in r.text and "ann" in r.text
+
+
+# ---- row details ----
+
+
+def test_status_note_rendered(client, seeded, store, now):
+    item = store.get_item_by_guid("imdb://tt0080421")
+    store.set_status(item.id, "ignored", now, note="removed from Plex")
+    assert "removed from Plex" in client.get("/ignored").text
+
+
+def _library_item(store, now, machine="marvin-id", key="2"):
+    from app.models import ScanLog
+
+    item = store.get_item_by_guid("imdb://tt0080421")
+    store.set_match(item.id, "1", key, "Movies", machine, "guid", now)
+    store.set_status(item.id, "library", now)
+    return item, ScanLog
+
+
+@pytest.mark.parametrize("reason,machine,selected,libs", [
+    ("server changed", "other-id", None, [{"key": "2", "name": "Movies", "ok": True, "count": 3, "error": None}]),
+    ("library not selected", "marvin-id", ["3"], [{"key": "3", "name": "TV", "ok": True, "count": 3, "error": None}]),
+    ("library listing failed", "marvin-id", None, [{"key": "2", "name": "Movies", "ok": False, "count": 0, "error": "x"}]),
+    ("library listed empty", "marvin-id", [], [{"key": "2", "name": "Movies", "ok": True, "count": 0, "error": None}]),
+])
+def test_library_not_rescanned_reasons(client, seeded, store, now, reason, machine, selected, libs):
+    item, ScanLog = _library_item(store, now)
+    store.set_setting("selected_library_keys", selected)
+    store.log_scan(ScanLog(now, now, True, machine_id=machine, libraries=libs))
+    html = client.get("/library").text
+    assert "not rescanned" in html and reason in html
+
+
+def test_library_rescanned_ok_shows_no_note(client, seeded, store, now):
+    item, ScanLog = _library_item(store, now)
+    store.log_scan(ScanLog(now, now, True, machine_id="marvin-id",
+                           libraries=[{"key": "2", "name": "Movies", "ok": True, "count": 3, "error": None}]))
+    html = client.get("/library").text
+    assert "not rescanned" not in html and "Matched" in html
+
+
+def test_grabbed_row_text_header_and_scan_now(client, seeded, store, now, monkeypatch):
+    monkeypatch.setattr("app.web.pages._now", lambda: now + timedelta(days=3))
+    item = store.get_item_by_guid("imdb://tt0080421")
+    store.set_status(item.id, "queued", now); store.set_status(item.id, "grabbed", now)
+    html = client.get("/grabbed").text
+    assert "grabbed 3 days ago, not yet seen by Plex" in html
+    assert "<span>Grabbed</span>" in html and "On watchlist since" not in html
+    assert 'hx-post="/fragments/scan"' in html
+    assert "On watchlist since" in client.get("/review").text
+
+
+def test_scan_fragment_runs_scan_and_triggers_refresh(client, store):
+    r = client.post("/fragments/scan")
+    assert r.status_code == 200 and 'id="header-status"' in r.text and 'id="tab-counts"' in r.text
+    assert r.headers["HX-Trigger"] == "wm-refreshed" and store.last_scan() is not None
+    assert store.last_fetch() is None
+
+
+def test_review_row_shows_genres_capped(client, seeded, store):
+    item = store.get_item_by_guid("imdb://tt0080421")
+    store.conn.execute("UPDATE items SET keywords=? WHERE id=?", ("drama,comedy,horror,war,western", item.id))
+    html = client.get("/review").text
+    assert "drama, comedy, horror, war" in html and "western" not in html
