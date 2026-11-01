@@ -12,6 +12,7 @@ DEFAULTS = {
     "feed_interval_min": DEFAULT_FEED_INTERVAL_MIN,
     "scan_interval_min": DEFAULT_SCAN_INTERVAL_MIN,
     "feed_cap_threshold": DEFAULT_CAP_THRESHOLD,
+    "own_watchlist_enabled": True,
 }
 RANGES = {
     "feed_interval_min": (INTERVAL_MIN, INTERVAL_MAX),

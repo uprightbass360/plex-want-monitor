@@ -58,31 +58,34 @@ class Store:
         return _Tx(self.conn)
 
     # items
-    def upsert_feed_items(self, items: Sequence[FeedItem], now: datetime) -> tuple[list[int], list[int]]:
+    def upsert_feed_items(self, items: Sequence[FeedItem], now: datetime,
+                          source: str = "feed") -> tuple[list[int], list[int]]:
         ts = to_iso(now)
         new: list[int] = []
         seen: list[int] = []
         with self._tx():
             for it in items:
-                row = self.conn.execute("SELECT id FROM items WHERE guid=?", (it.guid,)).fetchone()
+                row = self.conn.execute("SELECT id, in_feed, source FROM items WHERE guid=?", (it.guid,)).fetchone()
                 if row is None:
                     cur = self.conn.execute(
                         "INSERT INTO items (guid, type, title, raw_title, year, link, thumb, keywords,"
-                        " rating, pub_date, first_seen, last_seen, in_feed, status, status_changed_at)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,'review',?)",
+                        " rating, pub_date, first_seen, last_seen, in_feed, status, status_changed_at, source)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,'review',?,?)",
                         (it.guid, it.type, it.title, it.raw_title, it.year, it.link, it.thumb,
-                         ",".join(it.keywords), it.rating, to_iso(it.pub_date), ts, ts, ts),
+                         ",".join(it.keywords), it.rating, to_iso(it.pub_date), ts, ts, ts, source),
                     )
                     item_id = cur.lastrowid
                     new.append(item_id)
                 else:
                     item_id = row["id"]
+                    # a row that had left every source starts over; otherwise the sources merge
+                    merged = source if not row["in_feed"] or row["source"] == source else "both"
                     self.conn.execute(
                         "UPDATE items SET type=?, title=?, raw_title=?, year=?, link=?, thumb=?,"
-                        " keywords=?, rating=?, pub_date=?, last_seen=?, in_feed=1, left_feed_at=NULL"
-                        " WHERE id=?",
+                        " keywords=?, rating=?, pub_date=?, last_seen=?, in_feed=1, left_feed_at=NULL,"
+                        " source=? WHERE id=?",
                         (it.type, it.title, it.raw_title, it.year, it.link, it.thumb,
-                         ",".join(it.keywords), it.rating, to_iso(it.pub_date), ts, item_id),
+                         ",".join(it.keywords), it.rating, to_iso(it.pub_date), ts, merged, item_id),
                     )
                     seen.append(item_id)
                 if it.author_hash:
@@ -99,16 +102,35 @@ class Store:
                     )
         return new, seen
 
-    def mark_left_feed(self, present_guids: set[str], now: datetime) -> int:
+    def mark_left_feed(self, present_guids: set[str], now: datetime, source: str = "feed") -> int:
+        """Items of `source` missing from its latest listing. An item also held by the other source
+        only drops this source; one held by no source is marked as having left."""
         ts = to_iso(now)
+        other = "watchlist" if source == "feed" else "feed"
         with self._tx():
-            rows = self.conn.execute("SELECT id, guid FROM items WHERE in_feed=1").fetchall()
-            gone = [r["id"] for r in rows if r["guid"] not in present_guids]
-            for item_id in gone:
-                self.conn.execute(
-                    "UPDATE items SET in_feed=0, left_feed_at=? WHERE id=?", (ts, item_id)
-                )
+            rows = self.conn.execute(
+                "SELECT id, guid, source FROM items WHERE in_feed=1 AND source IN (?, 'both')", (source,)
+            ).fetchall()
+            gone = [r for r in rows if r["guid"] not in present_guids]
+            for r in gone:
+                if r["source"] == "both":
+                    self.conn.execute("UPDATE items SET source=? WHERE id=?", (other, r["id"]))
+                else:
+                    self.conn.execute(
+                        "UPDATE items SET in_feed=0, left_feed_at=? WHERE id=?", (ts, r["id"])
+                    )
         return len(gone)
+
+    def get_watchlist_guid(self, rating_key: str) -> str | None:
+        r = self.conn.execute("SELECT guid FROM watchlist_guids WHERE rating_key=?", (rating_key,)).fetchone()
+        return r["guid"] if r else None
+
+    def set_watchlist_guid(self, rating_key: str, guid: str, now: datetime) -> None:
+        self.conn.execute(
+            "INSERT INTO watchlist_guids (rating_key, guid, fetched_at) VALUES (?,?,?)"
+            " ON CONFLICT(rating_key) DO UPDATE SET guid=excluded.guid, fetched_at=excluded.fetched_at",
+            (rating_key, guid, to_iso(now)),
+        )
 
     def get_item(self, item_id: int) -> Item | None:
         r = self.conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
@@ -268,20 +290,23 @@ class Store:
     def log_fetch(self, log: FetchLog) -> int:
         cur = self.conn.execute(
             "INSERT INTO fetch_log (started_at, finished_at, ok, error, status_code, item_count,"
-            " new_count, truncated) VALUES (?,?,?,?,?,?,?,?)",
+            " new_count, truncated, source) VALUES (?,?,?,?,?,?,?,?,?)",
             (to_iso(log.started_at), to_iso(log.finished_at), int(log.ok), log.error,
-             log.status_code, log.item_count, log.new_count, int(log.truncated)),
+             log.status_code, log.item_count, log.new_count, int(log.truncated), log.source),
         )
         return cur.lastrowid
 
-    def last_fetch(self) -> FetchLog | None:
-        r = self.conn.execute("SELECT * FROM fetch_log ORDER BY id DESC LIMIT 1").fetchone()
+    def last_fetch(self, source: str = "feed") -> FetchLog | None:
+        r = self.conn.execute(
+            "SELECT * FROM fetch_log WHERE source=? ORDER BY id DESC LIMIT 1", (source,)
+        ).fetchone()
         if r is None:
             return None
         return FetchLog(
             id=r["id"], started_at=from_iso(r["started_at"]), finished_at=from_iso(r["finished_at"]),
             ok=bool(r["ok"]), error=r["error"], status_code=r["status_code"],
             item_count=r["item_count"], new_count=r["new_count"], truncated=bool(r["truncated"]),
+            source=r["source"],
         )
 
     def log_scan(self, log: ScanLog) -> int:

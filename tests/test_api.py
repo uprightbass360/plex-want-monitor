@@ -198,3 +198,23 @@ def test_item_dict_has_plex_library_alias(client, seeded, store, now):
     store.set_match(iid, "1", "2", "Movies", "mach", "guid", now); store.set_status(iid, "library", now)
     d = client.get("/api/items", params={"status": "library"}).json()["items"][0]
     assert d["plex_library"] == d["plex_library_name"] == "Movies"
+
+
+def test_own_watchlist_setting_round_trip(client):
+    assert client.get("/api/settings").json()["own_watchlist_enabled"] is True
+    r = client.put("/api/settings", json={"own_watchlist_enabled": False})
+    assert r.json()["own_watchlist_enabled"] is False
+    assert client.get("/api/settings").json()["own_watchlist_enabled"] is False
+
+
+def test_watchlist_sync_api(client, signed_in_auth, fake_watchlist, store):
+    fake_watchlist.add("rk1", "Fake Movie One", 2001, "movie", ["imdb://tt0000001"])
+    body = client.post("/api/watchlist/sync").json()
+    assert body["ok"] is True and body["source"] == "watchlist" and body["new_count"] == 1
+    items = client.get("/api/items").json()["items"]
+    assert items[0]["source"] == "watchlist" and items[0]["authors"][0]["hash"] == "owner-uuid-0001"
+
+
+def test_watchlist_sync_signed_out_409(client):
+    r = client.post("/api/watchlist/sync")
+    assert r.status_code == 409 and r.json() == {"error": "not signed in"}

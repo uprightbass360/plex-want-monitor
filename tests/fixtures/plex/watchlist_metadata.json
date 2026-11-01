@@ -1,0 +1,34 @@
+{
+  "MediaContainer": {
+    "size": 1,
+    "Metadata": [
+      {
+        "ratingKey": "aaaaaaaaaaaaaaaaaaaa0001",
+        "guid": "plex://movie/aaaaaaaaaaaaaaaaaaaa0001",
+        "type": "movie",
+        "title": "Fake Movie One",
+        "year": 2001,
+        "addedAt": 1760000000,
+        "thumb": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001.jpg",
+        "art": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001-art.jpg",
+        "contentRating": "PG",
+        "originallyAvailableAt": "2001-01-01",
+        "slug": "fake-movie-one",
+        "studio": "Fake Studio",
+        "tagline": "A fake tagline",
+        "userState": true,
+        "Guid": [
+          {
+            "id": "imdb://tt0000001"
+          },
+          {
+            "id": "tmdb://1001"
+          },
+          {
+            "id": "tvdb://2001"
+          }
+        ]
+      }
+    ]
+  }
+}

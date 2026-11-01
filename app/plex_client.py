@@ -30,6 +30,7 @@ class Pin:
 class PlexUser:
     id: int
     username: str
+    uuid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,7 @@ class PlexEntry:
     year: int | None
     type: str
     guids: tuple[str, ...]
+    plex_guid: str | None = None
 
 
 def _get_json(http: httpx.Client, method: str, url: str, headers: dict, timeout: float):
@@ -118,7 +120,7 @@ class PlexTV:
     def user(self, token: str) -> PlexUser:
         d = self._call("GET", "/api/v2/user", token)
         try:
-            return PlexUser(int(d["id"]), d["username"])
+            return PlexUser(int(d["id"]), d["username"], str(d["uuid"]) if d.get("uuid") else None)
         except (KeyError, TypeError, ValueError):
             raise PlexError("plex.tv returned an unexpected user response") from None
 
@@ -188,6 +190,7 @@ class PlexServerClient:
                     year=m.get("year"),
                     type=m["type"],
                     guids=tuple(g["id"] for g in m.get("Guid") or []),
+                    plex_guid=m.get("guid") or None,
                 )
                 for m in mc.get("Metadata", [])
             ]

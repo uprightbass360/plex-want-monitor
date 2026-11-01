@@ -197,10 +197,11 @@ def _rows(store, items) -> list[dict]:
 
 
 def _header_status(store) -> dict:
-    fetch, scan = store.last_fetch(), store.last_scan()
-    errors = [log.error for log in (fetch, scan) if log and not log.ok and log.error]
+    fetch, scan, wl = store.last_fetch(), store.last_scan(), store.last_fetch(source="watchlist")
+    errors = [log.error for log in (fetch, wl, scan) if log and not log.ok and log.error]
     return {
         "fetched_at": fetch.finished_at if fetch else None,
+        "watchlisted_at": wl.finished_at if wl else None,
         "scanned_at": scan.finished_at if scan else None,
         "truncated": bool(fetch and fetch.truncated),
         "errors": errors,

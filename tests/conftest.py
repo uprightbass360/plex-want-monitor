@@ -181,7 +181,7 @@ class FakePlexTV:
     def user(self, token):
         from app.plex_client import PlexUser
 
-        return PlexUser(1, self.username or "s4m")
+        return PlexUser(1, self.username or "s4m", "owner-uuid-0001")
 
     def servers(self, token):
         self.servers_calls += 1
@@ -219,6 +219,47 @@ class FakeHttp:
         return getattr(self.client, name)
 
 
+class FakeWatchlist:
+    """In-memory PlexWatchlist: entries is a list of WatchlistEntry, guids maps rating_key -> external guids."""
+
+    def __init__(self):
+        self.entries = []
+        self.guids = {}
+        self.fail = False
+        self.metadata_fail = set()
+        self.metadata_calls = []
+
+    def add(self, rating_key, title, year, type_="movie", guids=(), content_rating=None, added_at=None):
+        from app.plex_watchlist import WatchlistEntry
+
+        self.entries.append(WatchlistEntry(
+            rating_key, f"plex://{type_}/{rating_key}", type_, title, year, added_at, None, content_rating))
+        self.guids[rating_key] = tuple(guids)
+
+    def remove(self, rating_key):
+        self.entries = [e for e in self.entries if e.rating_key != rating_key]
+
+    def items(self):
+        from app.plex_client import PlexError
+
+        if self.fail:
+            raise PlexError("watchlist unavailable")
+        return list(self.entries)
+
+    def external_guids(self, rating_key):
+        from app.plex_client import PlexError
+
+        self.metadata_calls.append(rating_key)
+        if self.fail or rating_key in self.metadata_fail:
+            raise PlexError("metadata unavailable")
+        return self.guids.get(rating_key, ())
+
+
+@pytest.fixture
+def fake_watchlist():
+    return FakeWatchlist()
+
+
 @pytest.fixture
 def fake_http():
     return FakeHttp()
@@ -249,7 +290,7 @@ def fake_community():
 
 
 @pytest.fixture
-def make_auth(fake_plextv, fake_http, clock, fake_community):
+def make_auth(fake_plextv, fake_http, clock, fake_community, fake_watchlist):
     from app.plex_auth import PlexAuth
     from app.plex_client import PlexServerClient
 
@@ -261,6 +302,7 @@ def make_auth(fake_plextv, fake_http, clock, fake_community):
             fake_http.client,
             clock.now,
             community_factory=lambda token, client_id: fake_community,
+            watchlist_factory=lambda token, client_id: fake_watchlist,
         )
 
     return make
@@ -343,7 +385,7 @@ def fake_server():
 
 
 @pytest.fixture
-def connected_auth(make_auth, fake_plextv, fake_server, fake_http, clock, tmp_path):
+def connected_auth(make_auth, fake_plextv, fake_server, fake_http, clock, tmp_path, fake_watchlist):
     from app.plex_auth import PlexAuth
 
     auth = PlexAuth(
@@ -352,6 +394,7 @@ def connected_auth(make_auth, fake_plextv, fake_server, fake_http, clock, tmp_pa
         lambda url, token, timeout=None: fake_server,
         fake_http.client,
         clock.now,
+        watchlist_factory=lambda token, client_id: fake_watchlist,
     )
     auth.start_pin()
     fake_plextv.claim("tok-1", username="s4m")

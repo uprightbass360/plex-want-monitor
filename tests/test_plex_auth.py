@@ -135,3 +135,20 @@ def test_server_client_timeout_passes_through(signed_in_auth):
     signed_in_auth.select_server("marvin-id")
     assert signed_in_auth.server_client(timeout=5).timeout == 5
     assert signed_in_auth.server_client().timeout == 30
+
+
+def test_claim_stores_uuid_and_exposes_it(signed_in_auth, plex_auth):
+    assert signed_in_auth.status()["uuid"] == "owner-uuid-0001"
+    assert signed_in_auth.watchlist_client() is not None
+    signed_in_auth.signout()
+    assert signed_in_auth.status()["uuid"] is None and signed_in_auth.watchlist_client() is None
+
+
+def test_default_watchlist_factory_builds_client(plex_auth):
+    from app.plex_auth import PlexAuth
+    from app.plex_watchlist import PlexWatchlist
+
+    a = PlexAuth(plex_auth.path, plex_auth.plextv, plex_auth.server_factory, plex_auth.http, plex_auth.clock)
+    assert a.watchlist_client() is None
+    a._state["token"] = "t"
+    assert isinstance(a.watchlist_client(), PlexWatchlist)

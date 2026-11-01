@@ -18,6 +18,7 @@ from app.web.settings_shared import (
 router = APIRouter()
 
 STALE = "status changed, reload"
+_NOT_SIGNED_IN = "not signed in"
 
 
 def _now() -> datetime:
@@ -197,6 +198,7 @@ class SettingsBody(BaseModel):
     feed_interval_min: int | None = Field(None, ge=INTERVAL_MIN, le=INTERVAL_MAX)
     scan_interval_min: int | None = Field(None, ge=INTERVAL_MIN, le=INTERVAL_MAX)
     feed_cap_threshold: int | None = Field(None, ge=CAP_MIN, le=CAP_MAX)
+    own_watchlist_enabled: bool | None = None
     selected_library_keys: list[str] | None = None
     friends: list[Friend] | None = None
 
@@ -245,10 +247,16 @@ async def friends_resolve(request: Request):
     return {"resolved": await app.state.scheduler.resolve_now()}
 
 
+@router.post("/api/watchlist/sync")
+async def watchlist_sync(request: Request):
+    app = request.app
+    if app.state.auth.watchlist_client() is None:
+        return _error(409, _NOT_SIGNED_IN)
+    result = await app.state.scheduler.watchlist_now()
+    return jsonable_encoder(result) if result else {"skipped": True}
+
+
 # ---- plex ----
-
-_NOT_SIGNED_IN = "not signed in"
-
 
 def _plex_call(fn):
     try:

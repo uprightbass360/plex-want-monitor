@@ -27,6 +27,8 @@ most single-user hosts), or `chown 1000:1000 data` afterwards.
 4. Pick your server from the list.
 5. Tick the libraries to scan, then press Scan now (or wait for the interval).
 
+After signing in to Plex, your own watchlist is pulled in alongside the friends' feed on the same schedule (Settings, "Also include my own watchlist"). Items both you and a friend want appear once; you show up as an author with your Plex name and avatar.
+
 ## Statuses
 
 | status    | meaning                                                          |
@@ -54,6 +56,7 @@ Item responses never include the Plex token or the feed URL.
   `POST /api/plex/server`, `POST /api/plex/reconnect`, `POST /api/plex/signout`
 - `GET /api/plex/libraries` (the selected server's libraries: key, type, title)
 - `POST /api/friends/resolve` (look up friend names and avatars from Plex now)
+- `POST /api/watchlist/sync` (sync your own Plex watchlist now; `own_watchlist_enabled` in `/api/settings` turns the automatic sync on or off)
 - `GET /api/settings`, `PUT /api/settings` (the feed URL is masked except its
   last four characters)
 

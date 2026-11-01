@@ -42,3 +42,13 @@ def test_guid_requires_same_type(index):
 
 def test_rating_keys_union(index):
     assert "14696" in index.rating_keys
+
+
+def test_plex_guid_indexed_for_fallback_match():
+    from app.matcher import build_index, find_match
+    from app.plex_client import Library, PlexEntry
+
+    lib = Library("2", "movie", "Movies")
+    idx = build_index([(lib, [PlexEntry("9", "Obscure", 2020, "movie", ("imdb://tt9",), "plex://movie/abc123")])])
+    m = find_match("movie", "plex://movie/abc123", "Other", None, idx)
+    assert m and m.method == "guid" and m.rating_key == "9"

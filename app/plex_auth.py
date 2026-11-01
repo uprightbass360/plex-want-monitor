@@ -22,6 +22,7 @@ from app.plex_client import (
     pick_connection,
 )
 from app.plex_community import PlexCommunity
+from app.plex_watchlist import PlexWatchlist
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ class PlexAuth:
         http: httpx.Client,
         clock: Callable[[], datetime],
         community_factory: Callable[[str, str], PlexCommunity] | None = None,
+        watchlist_factory: Callable[[str, str], PlexWatchlist] | None = None,
     ):
         self.path = Path(path)
         self.plextv = plextv
@@ -56,6 +58,7 @@ class PlexAuth:
         self.http = http
         self.clock = clock
         self.community_factory = community_factory or (lambda token, client_id: PlexCommunity(http, token, client_id))
+        self.watchlist_factory = watchlist_factory or (lambda token, client_id: PlexWatchlist(http, token, client_id))
         self._lock = threading.Lock()  # held across every state mutation and its _save
         with self._lock:
             self._state = self._load()
@@ -75,6 +78,7 @@ class PlexAuth:
         fresh = not state.get("client_id")
         state.setdefault("token", None)
         state.setdefault("username", None)
+        state.setdefault("uuid", None)
         state.setdefault("pending_pin", None)
         state.setdefault("server", None)
         if fresh:
@@ -123,11 +127,11 @@ class PlexAuth:
             token = self.plextv.check_pin(pending["id"])
             if not token:
                 return PinStatus("waiting", code)
-            username = self.plextv.user(token).username
+            user = self.plextv.user(token)
         except PlexError:
             return PinStatus("waiting", code)  # transient: keep the PIN
         with self._lock:
-            self._state.update(token=token, username=username, pending_pin=None)
+            self._state.update(token=token, username=user.username, uuid=user.uuid, pending_pin=None)
             self._save()
         return PinStatus("claimed", code)
 
@@ -183,7 +187,7 @@ class PlexAuth:
 
     def signout(self) -> None:
         with self._lock:
-            self._state.update(token=None, username=None, pending_pin=None, server=None)
+            self._state.update(token=None, username=None, uuid=None, pending_pin=None, server=None)
             self._save()
 
     def server_client(self, timeout: float | None = None) -> PlexServerClient | None:
@@ -200,12 +204,36 @@ class PlexAuth:
             return None
         return self.community_factory(token, self.client_id)
 
+    def watchlist_client(self) -> PlexWatchlist | None:
+        token = self._state["token"]
+        if not token:
+            return None
+        return self.watchlist_factory(token, self.client_id)
+
+    def owner_uuid(self) -> str | None:
+        """The owner's plex.tv uuid; fetched once for sign-ins that predate it. None when unavailable."""
+        if self._state["uuid"]:
+            return self._state["uuid"]
+        token = self._state["token"]
+        if not token:
+            return None
+        try:
+            found = self.plextv.user(token).uuid
+        except PlexError:
+            return None
+        if found:
+            with self._lock:
+                self._state["uuid"] = found
+                self._save()
+        return found
+
     def status(self) -> dict:
         s = self._state["server"]
         p = self._state["pending_pin"]
         return {
             "signed_in": bool(self._state["token"]),
             "username": self._state["username"],
+            "uuid": self._state["uuid"],
             "server": {
                 "name": s["name"],
                 "machine_id": s["machine_id"],

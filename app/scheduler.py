@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from app.models import FetchLog, ScanLog
 from app.plex_community import resolve_authors
+from app.plex_watchlist import run_watchlist_sync
 from app.poller import run_fetch
 from app.scanner import run_scan
 
@@ -30,7 +31,27 @@ class Scheduler:
             return None
         async with self._fetch_lock:
             result = await asyncio.to_thread(run_fetch, self.store, self.fetcher, self.clock())
-        if result.new_count > 0:
+            watchlist = await self._sync_watchlist()
+        if result.new_count + (watchlist.new_count if watchlist else 0) > 0:
+            await self.resolve_now()
+            await self.scan_now()
+        return result
+
+    async def _sync_watchlist(self):
+        """Sync the owner's watchlist; never raises, so it cannot break a fetch."""
+        try:
+            return await asyncio.to_thread(run_watchlist_sync, self.store, self.auth, self.clock())
+        except Exception:
+            log.warning("watchlist sync failed", exc_info=False)
+            return None
+
+    async def watchlist_now(self) -> FetchLog | None:
+        """Sync the owner's watchlist on demand; None if a fetch or sync is already running."""
+        if self._fetch_lock.locked():
+            return None
+        async with self._fetch_lock:
+            result = await self._sync_watchlist()
+        if result and result.new_count > 0:
             await self.resolve_now()
             await self.scan_now()
         return result

@@ -36,6 +36,8 @@ def _feed_ctx(request: Request, **extra) -> dict:
         "interval": store.get_setting("feed_interval_min", DEFAULTS["feed_interval_min"]),
         "cap": store.get_setting("feed_cap_threshold", DEFAULTS["feed_cap_threshold"]),
         "fetch": store.last_fetch(),
+        "watchlist_enabled": store.get_setting("own_watchlist_enabled", DEFAULTS["own_watchlist_enabled"]),
+        "watchlist": store.last_fetch(source="watchlist"),
         "now": _now(),
         "note": None, "error": None, "test": None,
         **extra,
@@ -49,7 +51,7 @@ def feed_card(request: Request):
 
 @router.post("/fragments/settings/feed", response_class=HTMLResponse)
 def save_feed(request: Request, feed_url: Text = None, feed_interval_min: Text = None,
-              feed_cap_threshold: Text = None):
+              feed_cap_threshold: Text = None, own_watchlist_enabled: Text = None):
     store = request.app.state.store
     interval = parse_setting_int("feed_interval_min", feed_interval_min)
     cap = parse_setting_int("feed_cap_threshold", feed_cap_threshold)
@@ -62,6 +64,7 @@ def save_feed(request: Request, feed_url: Text = None, feed_interval_min: Text =
         store.set_setting("feed_url", url)
     store.set_setting("feed_interval_min", interval)
     store.set_setting("feed_cap_threshold", cap)
+    store.set_setting("own_watchlist_enabled", own_watchlist_enabled is not None)
     return _card(request, "feed_card", _feed_ctx(request, note="Saved"))
 
 
@@ -87,6 +90,15 @@ def test_feed(request: Request, feed_url: Text = None):
 @router.post("/fragments/settings/feed/fetch", response_class=HTMLResponse)
 async def fetch_feed(request: Request):
     result = await request.app.state.scheduler.fetch_now()
+    note = None if result else "A fetch is already running."
+    return _card(request, "feed_card", _feed_ctx(request, note=note))
+
+
+@router.post("/fragments/settings/watchlist/sync", response_class=HTMLResponse)
+async def sync_watchlist(request: Request):
+    if request.app.state.auth.watchlist_client() is None:
+        return _card(request, "feed_card", _feed_ctx(request, error="Sign in to Plex to sync your watchlist."), 409)
+    result = await request.app.state.scheduler.watchlist_now()
     note = None if result else "A fetch is already running."
     return _card(request, "feed_card", _feed_ctx(request, note=note))
 

@@ -503,3 +503,37 @@ def test_switching_server_resets_library_selection(connected_client, store):
     store.set_setting("selected_library_keys", ["9"])
     connected_client.post("/api/plex/server", json={"machine_id": "marvin-id"})
     assert store.get_setting("selected_library_keys") is None
+
+
+def test_feed_card_has_watchlist_checkbox_and_sync(client, store, signed_in_auth, fake_watchlist, now, monkeypatch):
+    html = client.get("/fragments/settings/feed").text
+    assert 'name="own_watchlist_enabled"' in html and "Also include my own watchlist" in html
+    assert 'hx-post="/fragments/settings/watchlist/sync"' in html and " checked" in html
+    r = client.post("/fragments/settings/feed", data={"feed_interval_min": "15", "feed_cap_threshold": "25"})
+    assert store.get_setting("own_watchlist_enabled") is False and " checked" not in r.text.split('name="own_watchlist_enabled"')[1].split(">")[0]
+    fake_watchlist.add("rk1", "Fake Movie One", 2001, "movie", ["imdb://tt0000001"])
+    store.set_setting("own_watchlist_enabled", True)
+    r = client.post("/fragments/settings/watchlist/sync")
+    assert r.status_code == 200 and "Last watchlist sync" in r.text and "1 items, 1 new" in r.text
+
+
+def test_header_shows_watchlist_age(client, store, now, monkeypatch):
+    monkeypatch.setattr("app.web.pages._now", lambda: now)
+    start = now - timedelta(minutes=7)
+    store.log_fetch(FetchLog(start, start, True))
+    assert "watchlist" not in client.get("/fragments/header-status").text
+    store.log_fetch(FetchLog(start, start, True, source="watchlist"))
+    html = client.get("/fragments/header-status").text
+    assert "feed 7 min ago" in html and "watchlist 7 min ago" in html
+
+
+def test_owner_chip_rendered_on_review_row(client, store, signed_in_auth, fake_watchlist, fake_community):
+    from app.plex_community import CommunityUser
+
+    fake_community.users = {"owner-uuid-0001": CommunityUser("owner-uuid-0001", "me", "Owner Me", "https://x/o.png")}
+    fake_watchlist.add("rk1", "Fake Movie One", 2001, "movie", ["imdb://tt0000001"])
+    client.post("/api/watchlist/sync")
+    client.post("/api/friends/resolve")
+    html = client.get("/review").text
+    assert "Fake Movie One" in html and "Owner Me" in html and "https://x/o.png" in html
+    assert "author=owner-uuid-0001" in html

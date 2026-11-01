@@ -11,6 +11,10 @@
       <input id="feed_cap_threshold" name="feed_cap_threshold" type="number" min="1" max="500" class="in narrow" value="{{ cap }}"><span class="muted">items</span>
     </div>
     <div class="frow"><label></label>
+      <label class="inline"><input type="checkbox" name="own_watchlist_enabled" value="1"{% if watchlist_enabled %} checked{% endif %}> Also include my own watchlist</label>
+      <button type="button" class="btn" hx-post="/fragments/settings/watchlist/sync" hx-target="#feed-card" hx-swap="outerHTML" hx-disabled-elt="this">Sync now</button>
+    </div>
+    <div class="frow"><label></label>
       <button type="submit" class="btn prominent">Save</button>
       <button type="button" class="btn" hx-post="/fragments/settings/feed/fetch" hx-target="#feed-card" hx-swap="outerHTML" hx-disabled-elt="this">Fetch now</button>
       {% if note %}<span class="ok-text" role="status">{{ note }}</span>{% endif %}
@@ -24,5 +28,11 @@
       {% if fetch.ok %}{{ fetch.item_count }} items, {{ fetch.new_count }} new{% if fetch.status_code == 304 %} (not modified){% endif %}{% if fetch.truncated %}, may be truncated{% endif %}
       {% else %}<span class="err-text">{{ fetch.error }}</span>{% endif %}
     {% else %}No fetch yet.{% endif %}
+    <br>
+    {% if watchlist %}
+      Last watchlist sync {{ watchlist.finished_at|ago(now) }}:
+      {% if watchlist.ok %}{{ watchlist.item_count }} items, {{ watchlist.new_count }} new
+      {% else %}<span class="err-text">{{ watchlist.error }}</span>{% endif %}
+    {% else %}No watchlist sync yet.{% endif %}
   </p>
 </section>

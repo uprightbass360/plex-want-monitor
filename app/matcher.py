@@ -39,7 +39,7 @@ def build_index(listings: Iterable[tuple[Library, Sequence[PlexEntry]]]) -> Libr
         for e in entries:
             ie = IndexedEntry(e.rating_key, lib.key, lib.title, e.title, e.year, e.type or lib.type)
             keys.add(e.rating_key)
-            for g in e.guids:
+            for g in (*e.guids, *([e.plex_guid] if e.plex_guid else [])):
                 by_guid.setdefault(g, ie)
             by_title.setdefault((ie.type, normalize_title(e.title)), []).append(ie)
     return LibraryIndex(by_guid, by_title, frozenset(keys))

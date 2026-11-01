@@ -56,6 +56,7 @@ class Item:
     match_method: str | None
     matched_at: datetime | None
     rejected_rating_keys: tuple[str, ...]
+    source: str = "feed"
 
     @classmethod
     def from_row(cls, r: sqlite3.Row) -> Item:
@@ -73,6 +74,7 @@ class Item:
             plex_machine_id=r["plex_machine_id"], match_method=r["match_method"],
             matched_at=from_iso(r["matched_at"]),
             rejected_rating_keys=tuple(json.loads(r["rejected_rating_keys"] or "[]")),
+            source=r["source"],
         )
 
 
@@ -103,6 +105,7 @@ class FetchLog:
     item_count: int = 0
     new_count: int = 0
     truncated: bool = False
+    source: str = "feed"
 
 
 @dataclass
@@ -143,6 +146,7 @@ def item_to_dict(item: Item, authors: list[Author]) -> dict:
     return {
         "id": item.id,
         "guid": item.guid,
+        "source": item.source,
         "type": item.type,
         "title": item.title,
         "raw_title": item.raw_title,

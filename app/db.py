@@ -38,6 +38,11 @@ ALTER TABLE authors ADD COLUMN display_name TEXT;
 ALTER TABLE authors ADD COLUMN avatar_url TEXT;
 ALTER TABLE authors ADD COLUMN resolved_at TEXT;
 """,
+    """
+ALTER TABLE items ADD COLUMN source TEXT NOT NULL DEFAULT 'feed';
+ALTER TABLE fetch_log ADD COLUMN source TEXT NOT NULL DEFAULT 'feed';
+CREATE TABLE watchlist_guids (rating_key TEXT PRIMARY KEY, guid TEXT NOT NULL, fetched_at TEXT NOT NULL);
+""",
 ]
 
 

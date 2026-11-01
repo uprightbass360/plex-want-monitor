@@ -158,3 +158,39 @@ def test_set_status_expected_from_mismatch_raises_stale(store, feed_items, now):
         store.set_status(ids[0], "ignored", now, expected_from="review")
     assert store.get_item(ids[0]).status == "queued"
     assert store.set_status(ids[0], "grabbed", now, expected_from="queued").status == "grabbed"
+
+
+def _wl(guid, author=None):
+    from app.feed import FeedItem
+
+    return FeedItem(guid, "movie", "T", "T", 2000, None, None, (), None, None, author)
+
+
+def test_source_transitions_and_source_scoped_leave(store, now):
+    store.upsert_feed_items([_wl("g1", "a")], now)
+    assert store.get_item_by_guid("g1").source == "feed"
+    store.upsert_feed_items([_wl("g1", "o")], now, source="watchlist")
+    assert store.get_item_by_guid("g1").source == "both"
+    store.upsert_feed_items([_wl("g1", "a")], now)
+    assert store.get_item_by_guid("g1").source == "both"
+    # leaves the feed but stays on the watchlist
+    store.mark_left_feed(set(), now)
+    it = store.get_item_by_guid("g1")
+    assert it.source == "watchlist" and it.in_feed
+    # now leaves the watchlist too
+    store.mark_left_feed(set(), now, source="watchlist")
+    it = store.get_item_by_guid("g1")
+    assert it.in_feed is False
+    # returning via the feed resets source to feed
+    store.upsert_feed_items([_wl("g1", "a")], now)
+    assert store.get_item_by_guid("g1").source == "feed"
+
+
+def test_watchlist_guid_cache_and_log_source(store, now):
+    from app.models import FetchLog
+
+    assert store.get_watchlist_guid("r1") is None
+    store.set_watchlist_guid("r1", "imdb://tt1", now)
+    assert store.get_watchlist_guid("r1") == "imdb://tt1"
+    store.log_fetch(FetchLog(now, now, True, source="watchlist"))
+    assert store.last_fetch() is None and store.last_fetch(source="watchlist").source == "watchlist"

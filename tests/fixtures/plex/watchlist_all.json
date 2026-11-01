@@ -1,0 +1,57 @@
+{
+  "MediaContainer": {
+    "totalSize": 3,
+    "size": 3,
+    "offset": 0,
+    "Metadata": [
+      {
+        "ratingKey": "aaaaaaaaaaaaaaaaaaaa0001",
+        "guid": "plex://movie/aaaaaaaaaaaaaaaaaaaa0001",
+        "type": "movie",
+        "title": "Fake Movie One",
+        "year": 2001,
+        "addedAt": 1760000000,
+        "thumb": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001.jpg",
+        "art": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0001-art.jpg",
+        "contentRating": "PG",
+        "originallyAvailableAt": "2001-01-01",
+        "slug": "fake-movie-one",
+        "studio": "Fake Studio",
+        "tagline": "A fake tagline",
+        "userState": true
+      },
+      {
+        "ratingKey": "aaaaaaaaaaaaaaaaaaaa0002",
+        "guid": "plex://show/aaaaaaaaaaaaaaaaaaaa0002",
+        "type": "show",
+        "title": "Fake Show Two",
+        "year": 2012,
+        "addedAt": 1760100000,
+        "thumb": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0002.jpg",
+        "art": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0002-art.jpg",
+        "contentRating": "TV-MA",
+        "originallyAvailableAt": "2012-01-01",
+        "slug": "fake-show-two",
+        "studio": "Fake Studio",
+        "tagline": "A fake tagline",
+        "userState": true
+      },
+      {
+        "ratingKey": "aaaaaaaaaaaaaaaaaaaa0003",
+        "guid": "plex://movie/aaaaaaaaaaaaaaaaaaaa0003",
+        "type": "movie",
+        "title": "Fake Movie Three",
+        "year": 1999,
+        "addedAt": 1760200000,
+        "thumb": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0003.jpg",
+        "art": "https://metadata-static.plex.tv/fake/aaaaaaaaaaaaaaaaaaaa0003-art.jpg",
+        "contentRating": "R",
+        "originallyAvailableAt": "1999-01-01",
+        "slug": "fake-movie-three",
+        "studio": "Fake Studio",
+        "tagline": "A fake tagline",
+        "userState": true
+      }
+    ]
+  }
+}
