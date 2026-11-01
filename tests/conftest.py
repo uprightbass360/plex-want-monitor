@@ -384,3 +384,13 @@ class SlowAuth:
 @pytest.fixture
 def slow_auth():
     return SlowAuth()
+
+
+@pytest.fixture
+def seeded(store, fetcher, fixture_bytes, now):
+    from app.poller import FetchResponse, run_fetch
+
+    store.set_setting("feed_url", "https://rss.plex.tv/8e18-aaaa-81e5")
+    fetcher.queue(FetchResponse(200, fixture_bytes, None))
+    assert run_fetch(store, fetcher, now).ok
+    return store
