@@ -1,4 +1,5 @@
 from datetime import timedelta
+import re
 
 import pytest
 
@@ -543,3 +544,42 @@ def test_sync_now_disabled_shows_reason(client, store, signed_in_auth):
     store.set_setting("own_watchlist_enabled", False)
     r = client.post("/fragments/settings/watchlist/sync")
     assert r.status_code == 200 and "Own watchlist disabled." in r.text
+
+
+# ---- person filter ----
+
+
+def _author_select(html):
+    import re
+    m = re.search(r'<select name="author" aria-label="Filter by person">(.*?)</select>', html, re.S)
+    assert m, "author select missing"
+    return m.group(1)
+
+
+def test_person_select_on_review_and_queue(client, seeded):
+    for path in ("/review", "/queue"):
+        body = _author_select(client.get(path).text)
+        opts = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', body)
+        assert opts[0] == ("", "Everyone")
+        counts = {h: c for h, c in ((a.hash, a.item_count) for a in seeded.list_authors())}
+        names = {a.hash: a.name for a in seeded.list_authors()}
+        assert {v for v, _ in opts[1:]} == set(counts)
+        for v, text in opts[1:]:
+            assert text == f"{names[v]} ({counts[v]})"
+        labels = [names[v].lower() for v, _ in opts[1:]]
+        assert labels == sorted(labels)
+    html = client.get("/review").text
+    assert 'type="hidden" name="author"' not in html and "Show everyone" not in html
+
+
+def test_person_filter_selected_rows_and_json_link(client, seeded):
+    html = client.get("/review?author=friend-b").text
+    assert re.search(r'<option value="friend-b" selected>', html)
+    assert "author=friend-b" in html
+    rows = client.get("/fragments/review/rows?author=friend-b")
+    assert "author=friend-b" in rows.headers["HX-Push-Url"] and "author=friend-b" in rows.text
+    ids_b = {i.title for i in seeded.list_items(ItemFilter(author="friend-b"))}
+    all_titles = {i.title for i in seeded.list_items(ItemFilter())}
+    assert ids_b and ids_b < all_titles
+    for t in ids_b: assert t in rows.text
+    for t in all_titles - ids_b: assert t not in rows.text

@@ -210,11 +210,13 @@ def _header_status(store) -> dict:
 
 def _context(request: Request, tab: Tab, f: Filters, **extra) -> dict:
     store = request.app.state.store
+    people = store.list_authors()
     return {
         "tab": tab, "tabs": TABS, "f": f, "now": _now(),
         "counts": _counts(store),
         "json_href": _json_href(tab, f),
-        "authors": {a.hash: a.name for a in store.list_authors()},
+        "authors": {a.hash: a.name for a in people},
+        "author_options": sorted(people, key=lambda a: a.name.casefold()),
         **extra,
     }
 

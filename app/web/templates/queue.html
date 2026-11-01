@@ -8,6 +8,7 @@
     <label class="chip"><input type="radio" name="type" value="{{ value }}"{% if f.type == value %} checked{% endif %}>{{ label }}</label>
     {% endfor %}
   </div>
+  {% include "partials/author_select.html" %}
   <span class="muted">Order: oldest first</span>
   <span id="queue-progress" class="progress" data-total="{{ rows|length }}">0 of {{ rows|length }} done this session</span>
   <button type="button" id="copy-all" class="btn" data-copy-url="/api/items/queue.txt">Copy all as text</button>
