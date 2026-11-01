@@ -82,6 +82,14 @@ class Author:
     label: str | None
     item_count: int
     last_seen: datetime | None
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+    resolved_at: datetime | None = None
+
+    @property
+    def name(self) -> str:
+        return self.display_name or self.username or self.label or self.hash[:6]
 
 
 @dataclass
@@ -162,5 +170,11 @@ def item_to_dict(item: Item, authors: list[Author]) -> dict:
         "rejected_rating_keys": list(item.rejected_rating_keys),
         "search_string": search_string(item.type, item.title, item.year),
         "plex_web_url": url,
-        "authors": [{"hash": a.hash, "label": a.label} for a in authors],
+        "authors": [
+            {
+                "hash": a.hash, "label": a.label, "username": a.username,
+                "display_name": a.display_name, "avatar_url": a.avatar_url, "name": a.name,
+            }
+            for a in authors
+        ],
     }

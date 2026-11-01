@@ -326,3 +326,36 @@ def test_settings_card_get_routes_and_refresh_triggers(client):
     page = client.get("/settings").text
     for n in ("feed", "plex"):
         assert f'hx-get="/fragments/settings/{n}" hx-trigger="wm-refreshed from:body"' in page
+
+
+def _resolve(client, fake_community):
+    from app.plex_community import CommunityUser
+
+    fake_community.users = {
+        "friend-a": CommunityUser("friend-a", "ann", "Ann P", "https://api.plex.tv/users/a/avatar?t=1&x=2"),
+        "friend-b": CommunityUser("friend-b", "bob", "", None),
+    }
+    assert client.post("/api/friends/resolve").json() == {"resolved": 2}
+
+
+def test_friends_card_shows_identity_not_label_input(client, signed_in_auth, seeded, fake_community):
+    _resolve(client, fake_community)
+    html = client.get("/settings").text
+    assert 'class="avatar"' in html and "avatar?t=1&amp;x=2" in html and 'loading="lazy"' in html
+    assert "Ann P" in html and "ann" in html and "bob" in html
+    assert 'name="label"' not in html and "Names come from Plex." in html
+    assert "/fragments/settings/friends/resolve" in html
+
+
+def test_review_row_shows_username_chip(client, signed_in_auth, seeded, fake_community):
+    _resolve(client, fake_community)
+    html = client.get("/review").text
+    assert "Ann P" in html and "avatar-sm" in html and ">friend<" not in html
+
+
+def test_friends_resolve_fragment_rerenders_card(client, signed_in_auth, seeded, fake_community):
+    from app.plex_community import CommunityUser
+
+    fake_community.users = {"friend-a": CommunityUser("friend-a", "ann", "", None)}
+    r = client.post("/fragments/settings/friends/resolve")
+    assert r.status_code == 200 and 'id="friends-card"' in r.text and "ann" in r.text

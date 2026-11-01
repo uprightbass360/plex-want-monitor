@@ -18,6 +18,7 @@ from app.plex_client import (
     PlexTV,
     pick_connection,
 )
+from app.plex_community import PlexCommunity
 
 
 @dataclass(frozen=True)
@@ -44,12 +45,14 @@ class PlexAuth:
         server_factory: Callable[[str, str], PlexServerClient],
         http: httpx.Client,
         clock: Callable[[], datetime],
+        community_factory: Callable[[str, str], PlexCommunity] | None = None,
     ):
         self.path = Path(path)
         self.plextv = plextv
         self.server_factory = server_factory
         self.http = http
         self.clock = clock
+        self.community_factory = community_factory or (lambda token, client_id: PlexCommunity(http, token, client_id))
         self._state = self._load()
 
     @property
@@ -170,6 +173,12 @@ class PlexAuth:
         if not s:
             return None
         return self.server_factory(s["base_url"], s["access_token"])
+
+    def community_client(self) -> PlexCommunity | None:
+        token = self._state["token"]
+        if not token:
+            return None
+        return self.community_factory(token, self.client_id)
 
     def status(self) -> dict:
         s = self._state["server"]

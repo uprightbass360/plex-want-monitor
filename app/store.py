@@ -20,6 +20,13 @@ _ORDER = {
 }
 
 
+def _author(r) -> Author:
+    return Author(
+        r["hash"], r["label"], r["n"], from_iso(r["last_seen"]),
+        r["username"], r["display_name"], r["avatar_url"], from_iso(r["resolved_at"]),
+    )
+
+
 def _locked(fn):
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
@@ -145,25 +152,39 @@ class Store:
         if not item_ids:
             return out
         rows = self.conn.execute(
-            f"SELECT ia.item_id, a.hash, a.label, a.last_seen,"
+            f"SELECT ia.item_id, a.hash, a.label, a.last_seen, a.username, a.display_name, a.avatar_url, a.resolved_at,"
             f" (SELECT COUNT(*) FROM item_authors x WHERE x.author_hash=a.hash) AS n"
             f" FROM item_authors ia JOIN authors a ON a.hash=ia.author_hash"
             f" WHERE ia.item_id IN ({','.join('?' * len(item_ids))}) ORDER BY a.hash",
             list(item_ids),
         )
         for r in rows:
-            out[r["item_id"]].append(Author(r["hash"], r["label"], r["n"], from_iso(r["last_seen"])))
+            out[r["item_id"]].append(_author(r))
         return out
 
     def list_authors(self) -> list[Author]:
         rows = self.conn.execute(
-            "SELECT a.hash, a.label, a.last_seen, COUNT(ia.item_id) AS n FROM authors a"
+            "SELECT a.hash, a.label, a.last_seen, a.username, a.display_name, a.avatar_url, a.resolved_at, COUNT(ia.item_id) AS n FROM authors a"
             " LEFT JOIN item_authors ia ON ia.author_hash=a.hash GROUP BY a.hash ORDER BY a.hash"
         )
-        return [Author(r["hash"], r["label"], r["n"], from_iso(r["last_seen"])) for r in rows]
+        return [_author(r) for r in rows]
 
     def set_author_label(self, hash: str, label: str | None) -> None:
         self.conn.execute("UPDATE authors SET label=? WHERE hash=?", (label or None, hash))
+
+    def set_author_identity(
+        self, hash: str, username: str | None, display_name: str | None, avatar_url: str | None, now: datetime
+    ) -> None:
+        self.conn.execute(
+            "UPDATE authors SET username=?, display_name=?, avatar_url=?, resolved_at=? WHERE hash=?",
+            (username or None, display_name or None, avatar_url or None, to_iso(now), hash),
+        )
+
+    def unresolved_authors(self, limit: int = 50) -> list[str]:
+        rows = self.conn.execute(
+            "SELECT hash FROM authors WHERE resolved_at IS NULL ORDER BY hash LIMIT ?", (limit,)
+        )
+        return [r["hash"] for r in rows]
 
     # status
     def _next_queue_order(self) -> int:

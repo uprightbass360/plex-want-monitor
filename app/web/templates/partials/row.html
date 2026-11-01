@@ -4,7 +4,7 @@
   <div class="info">
     <div class="title">{{ row.title }}{% if row.year %}<small>{{ row.year }}</small>{% endif %}</div>
     <div class="sub">
-      {%- for a in row.authors %}<a href="/{{ tab.key }}?author={{ a.hash|urlencode }}">{{ a.label or a.hash[:6] }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+      {%- for a in row.authors %}<a href="/{{ tab.key }}?author={{ a.hash|urlencode }}">{% if a.avatar_url %}<img class="avatar-sm" src="{{ a.avatar_url }}" alt="" loading="lazy" width="16" height="16"> {% endif %}{{ a.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
       {%- if tab.key == "library" and row.plex_library_name %}<span> · {{ row.plex_library_name }}, matched by {{ row.match_method }}</span>{% endif %}
       {%- if not row.in_feed %}<span> · left the watchlist</span>{% endif %}
     </div>

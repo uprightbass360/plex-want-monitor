@@ -1,6 +1,7 @@
 <div class="qrow{% if done %} done{% endif %}" data-item-id="{{ row.id }}">
   <div class="qinfo">
     <div class="title">{{ row.title }}{% if row.year %}<small>{{ row.year }}</small>{% endif %} <span class="badge {{ row.type }}">{{ "Movie" if row.type == "movie" else "Show" }}</span></div>
+    {% if row.authors %}<div class="sub">{% for a in row.authors %}{% if a.avatar_url %}<img class="avatar-sm" src="{{ a.avatar_url }}" alt="" loading="lazy" width="16" height="16"> {% endif %}{{ a.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
   </div>
   <button type="button" class="copybox" data-copy="{{ row.search_string }}" title="Click to copy"><span class="cs">{{ row.search_string }}</span><span class="hint-copy">copy</span><span class="hint-copied">copied</span></button>
   <div class="actions">

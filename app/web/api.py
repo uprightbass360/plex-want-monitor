@@ -192,7 +192,12 @@ def _settings_view(store) -> dict:
         **{k: store.get_setting(k, d) for k, d in _DEFAULTS.items()},
         "selected_library_keys": store.get_setting("selected_library_keys", []),
         "friends": [
-            {"hash": a.hash, "label": a.label, "item_count": a.item_count} for a in store.list_authors()
+            {
+                "hash": a.hash, "label": a.label, "username": a.username,
+                "display_name": a.display_name, "avatar_url": a.avatar_url,
+                "name": a.name, "item_count": a.item_count,
+            }
+            for a in store.list_authors()
         ],
     }
 
@@ -214,6 +219,14 @@ def put_settings(request: Request, body: SettingsBody):
     for friend in body.friends or []:
         store.set_author_label(friend.hash, friend.label)
     return _settings_view(store)
+
+
+@router.post("/api/friends/resolve")
+async def friends_resolve(request: Request):
+    app = request.app
+    if app.state.auth.community_client() is None:
+        return _error(409, "not signed in")
+    return {"resolved": await app.state.scheduler.resolve_now()}
 
 
 # ---- plex ----

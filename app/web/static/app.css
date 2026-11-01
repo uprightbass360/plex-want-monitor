@@ -221,3 +221,7 @@ select, .search {
 .json li { margin-bottom: 4px; }
 code { font: 12px ui-monospace, monospace; color: var(--text); }
 @media (max-width: 760px) { .frow > label:first-child { flex-basis: 100%; } }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: 0 0 28px; background: var(--border, #ccc); display: inline-block; }
+.avatar-sm { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; vertical-align: -3px; }
+.fname { font-weight: 600; }

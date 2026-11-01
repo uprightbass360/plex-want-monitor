@@ -74,7 +74,8 @@ def test_item_to_dict_shape(store, feed_items, now):
     ids, _ = store.upsert_feed_items(feed_items, now)
     d = item_to_dict(store.get_item(ids[0]), store.authors_for(ids)[ids[0]])
     assert d["search_string"] == "Battle Beyond the Stars 1980"
-    assert d["authors"] == [{"hash": "friend-a", "label": None}]
+    assert d["authors"] == [{"hash": "friend-a", "label": None, "username": None, "display_name": None,
+                             "avatar_url": None, "name": "friend"}]
     assert "token" not in json.dumps(d).lower()
 
 
@@ -108,3 +109,39 @@ def test_concurrent_threads_share_store_safely(store, feed_items, now):
     assert errors == []
     assert not store.conn.in_transaction
     assert sum(store.counts_by_status().values()) == len(new)
+
+
+def test_migration_2_on_existing_v1_database(tmp_path, now):
+    from app import db
+
+    conn = db.connect(tmp_path / "old.db")
+    for stmt in db.MIGRATIONS[0].split(";"):
+        if stmt.strip():
+            conn.execute(stmt)
+    conn.execute("PRAGMA user_version = 1")
+    conn.execute("INSERT INTO authors (hash, label, first_seen, last_seen) VALUES ('h1','L','t','t')")
+    assert db.migrate(conn) == len(db.MIGRATIONS) >= 2
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(authors)")}
+    assert {"username", "display_name", "avatar_url", "resolved_at"} <= cols
+    assert conn.execute("SELECT label, username FROM authors").fetchone()["label"] == "L"
+    conn.close()
+
+
+def test_set_author_identity_and_unresolved(store, feed_items, now):
+    store.upsert_feed_items(feed_items, now)
+    assert set(store.unresolved_authors()) == {"friend-a", "friend-b"}
+    assert store.unresolved_authors(limit=1) == ["friend-a"]
+    store.set_author_identity("friend-a", "ann", "Ann", "https://x/a.png", now)
+    assert store.unresolved_authors() == ["friend-b"]
+    a = {x.hash: x for x in store.list_authors()}["friend-a"]
+    assert (a.username, a.display_name, a.avatar_url, a.resolved_at) == ("ann", "Ann", "https://x/a.png", now)
+    assert a.name == "Ann"
+    store.set_author_label("friend-b", "Bo")
+    b = {x.hash: x for x in store.list_authors()}["friend-b"]
+    assert b.name == "Bo"
+    store.set_author_identity("friend-b", "", "", None, now)
+    b = {x.hash: x for x in store.list_authors()}["friend-b"]
+    assert b.username is None and b.name == "Bo"
+    item = store.get_item_by_guid("imdb://tt0080421")
+    d = item_to_dict(item, store.authors_for([item.id])[item.id])
+    assert set(d["authors"][0]) == {"hash", "label", "username", "display_name", "avatar_url", "name"}

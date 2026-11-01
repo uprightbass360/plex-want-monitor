@@ -222,8 +222,28 @@ def fake_http():
     return FakeHttp()
 
 
+class FakeCommunity:
+    """In-memory PlexCommunity: users maps id -> CommunityUser; fail makes calls raise PlexError."""
+
+    def __init__(self):
+        self.users = {}
+        self.fail = False
+
+    def user(self, user_id):
+        from app.plex_client import PlexError
+
+        if self.fail:
+            raise PlexError("community unavailable")
+        return self.users.get(user_id)
+
+
 @pytest.fixture
-def make_auth(fake_plextv, fake_http, clock):
+def fake_community():
+    return FakeCommunity()
+
+
+@pytest.fixture
+def make_auth(fake_plextv, fake_http, clock, fake_community):
     from app.plex_auth import PlexAuth
     from app.plex_client import PlexServerClient
 
@@ -234,6 +254,7 @@ def make_auth(fake_plextv, fake_http, clock):
             lambda url, token: PlexServerClient(url, token, fake_http.client),
             fake_http.client,
             clock.now,
+            community_factory=lambda token, client_id: fake_community,
         )
 
     return make

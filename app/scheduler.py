@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from app.models import FetchLog, ScanLog
+from app.plex_community import resolve_authors
 from app.poller import run_fetch
 from app.scanner import run_scan
 
@@ -30,8 +31,17 @@ class Scheduler:
         async with self._fetch_lock:
             result = await asyncio.to_thread(run_fetch, self.store, self.fetcher, self.clock())
         if result.new_count > 0:
+            await self.resolve_now()
             await self.scan_now()
         return result
+
+    async def resolve_now(self) -> int:
+        """Resolve friend identities; never raises, so it cannot break a fetch."""
+        try:
+            return await asyncio.to_thread(resolve_authors, self.store, self.auth, self.clock())
+        except Exception:
+            log.warning("friend identity resolution failed", exc_info=False)
+            return 0
 
     async def scan_now(self) -> ScanLog | None:
         """Scan Plex; None if a scan is already running."""
@@ -58,6 +68,7 @@ class Scheduler:
 
     async def run_forever(self) -> None:
         last_fetch = last_scan = None
+        first = True
         while not self._stop.is_set():
             now = self.clock()
             if last_fetch is None or now - last_fetch >= self._interval(
@@ -65,6 +76,9 @@ class Scheduler:
             ):
                 last_fetch = now
                 await self._safely(self.fetch_now)
+                if first:
+                    first = False
+                    await self.resolve_now()
             now = self.clock()
             if last_scan is None or now - last_scan >= self._interval(
                 "scan_interval_min", DEFAULT_SCAN_INTERVAL_MIN

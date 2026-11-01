@@ -122,3 +122,22 @@ def test_settings_unset_defaults(client):
     body = client.get("/api/settings").json()
     assert body["feed_url_masked"] is None
     assert (body["feed_interval_min"], body["scan_interval_min"], body["feed_cap_threshold"]) == (15, 30, 25)
+
+
+def test_friends_resolve_api(client, signed_in_auth, seeded, fake_community):
+    from app.plex_community import CommunityUser
+
+    fake_community.users = {
+        "friend-a": CommunityUser("friend-a", "ann", "Ann", "https://x/a.png"),
+        "friend-b": CommunityUser("friend-b", "bob", "", None),
+    }
+    assert client.post("/api/friends/resolve").json() == {"resolved": 2}
+    f = {x["hash"]: x for x in client.get("/api/settings").json()["friends"]}
+    assert f["friend-a"]["username"] == "ann" and f["friend-a"]["name"] == "Ann"
+    assert f["friend-b"]["name"] == "bob" and f["friend-b"]["avatar_url"] is None
+    assert set(f["friend-a"]) == {"hash", "label", "username", "display_name", "avatar_url", "name", "item_count"}
+
+
+def test_friends_resolve_signed_out_409(client, seeded):
+    r = client.post("/api/friends/resolve")
+    assert r.status_code == 409 and r.json() == {"error": "not signed in"}

@@ -1,6 +1,7 @@
 <section id="friends-card" class="card">
   <h4>Friends</h4>
-  <p class="muted">Label the friends who add things to your watchlist. Labels show on the list rows.</p>
+  <p class="muted">Friends who have added things to the shared watchlist. Names come from Plex.</p>
   {% for a in authors %}{% include "partials/friend_row.html" %}
   {% else %}<p class="muted">No friends seen in the feed yet.</p>{% endfor %}
+  <button type="button" class="btn" hx-post="/fragments/settings/friends/resolve" hx-target="#friends-card" hx-swap="outerHTML">Refresh names</button>
 </section>

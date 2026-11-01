@@ -210,6 +210,14 @@ def save_friend(request: Request, hash: Annotated[str, Form()], label: Text = No
     return templates.TemplateResponse(request, "partials/friend_row.html", {"a": author, "saved": True})
 
 
+@router.post("/fragments/settings/friends/resolve", response_class=HTMLResponse)
+async def resolve_friends(request: Request):
+    if request.app.state.auth.community_client() is not None:
+        await request.app.state.scheduler.resolve_now()
+    store = request.app.state.store
+    return templates.TemplateResponse(request, "partials/friends_card.html", {"authors": store.list_authors()})
+
+
 # ---- page ----
 
 

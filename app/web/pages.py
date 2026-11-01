@@ -182,7 +182,7 @@ def _context(request: Request, tab: Tab, f: Filters, **extra) -> dict:
         "tab": tab, "tabs": TABS, "f": f, "now": _now(),
         "counts": _counts(store),
         "json_href": _json_href(tab, f),
-        "authors": {a.hash: a.label for a in store.list_authors()},
+        "authors": {a.hash: a.name for a in store.list_authors()},
         **extra,
     }
 

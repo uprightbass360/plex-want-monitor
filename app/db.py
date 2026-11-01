@@ -32,6 +32,12 @@ CREATE TABLE scan_log (id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, finishe
   indexed INTEGER NOT NULL DEFAULT 0, matched INTEGER NOT NULL DEFAULT 0, reverted INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX items_status ON items(status);
 """,
+    """
+ALTER TABLE authors ADD COLUMN username TEXT;
+ALTER TABLE authors ADD COLUMN display_name TEXT;
+ALTER TABLE authors ADD COLUMN avatar_url TEXT;
+ALTER TABLE authors ADD COLUMN resolved_at TEXT;
+""",
 ]
 
 
