@@ -4,10 +4,14 @@ import unicodedata
 _STRIP = re.compile(r"[:'\"/\\?!,.;]")
 
 
+_FOLD = str.maketrans({"ø": "o", "æ": "ae", "œ": "oe", "đ": "d", "ł": "l"})
+
+
 def normalize_title(title: str) -> str:
     folded = unicodedata.normalize("NFKD", title)
     folded = "".join(c for c in folded if not unicodedata.combining(c))
-    return re.sub(r"[^0-9a-z]+", " ", folded.lower()).strip()
+    folded = folded.casefold().translate(_FOLD)  # casefold: ß -> ss
+    return re.sub(r"[\W_]+", " ", folded).strip()
 
 
 def search_string(item_type: str, title: str, year: int | None) -> str:

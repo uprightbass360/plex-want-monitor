@@ -6,6 +6,8 @@ from app.normalize import normalize_title, search_string
 @pytest.mark.parametrize("title,key", [
     ("The 'Burbs", "the burbs"), ("Dune: Part Two", "dune part two"),
     ("12 Angry Men", "12 angry men"), ("Amélie", "amelie"), ("WALL·E", "wall e"),
+    ("Bjørk", "bjork"), ("Straße", "strasse"),
+    ("千と千尋の神隠し", "千と千尋の神隠し"), ("Начало", "начало"),
 ])
 def test_normalize_title(title, key):
     assert normalize_title(title) == key
