@@ -244,3 +244,89 @@ def signed_in_auth(plex_auth, fake_plextv):
     fake_plextv.claim("tok-1", username="s4m")
     assert plex_auth.poll_pin().state == "claimed"
     return plex_auth
+
+
+class FakeServerClient:
+    """In-memory PlexServerClient (GET-only interface)."""
+
+    def __init__(self, machine_id="marvin-id"):
+        from app.plex_client import Library
+
+        self._Library = Library
+        self.machine_id = machine_id
+        self.sections_list = []
+        self.entries = {}
+        self.failing = set()
+
+    def _ensure(self, key, name, type_):
+        if not any(s.key == key for s in self.sections_list):
+            self.sections_list.append(self._Library(key, type_, name))
+        self.entries.setdefault(key, [])
+
+    def add_section(self, key, name, type_="movie"):
+        self._ensure(key, name, type_)
+
+    def _add(self, type_, key, name, rating_key, title, year, guids):
+        from app.plex_client import PlexEntry
+
+        self._ensure(key, name, type_)
+        self.entries[key].append(PlexEntry(rating_key, title, year, type_, tuple(guids)))
+
+    def add_movie(self, section_key, section_name, rating_key, title, year, guids):
+        self._add("movie", section_key, section_name, rating_key, title, year, guids)
+
+    def add_show(self, section_key, section_name, rating_key, title, year, guids):
+        self._add("show", section_key, section_name, rating_key, title, year, guids)
+
+    def remove(self, rating_key):
+        for key in self.entries:
+            self.entries[key] = [e for e in self.entries[key] if e.rating_key != rating_key]
+
+    def fail_section(self, key):
+        self.failing.add(key)
+
+    def unfail(self, key):
+        self.failing.discard(key)
+
+    def identity(self):
+        from app.plex_client import ServerIdentity
+
+        return ServerIdentity(self.machine_id, "1.43.5")
+
+    def sections(self):
+        return list(self.sections_list)
+
+    def list_all(self, key):
+        from app.plex_client import PlexError
+
+        if key in self.failing:
+            raise PlexError(f"section {key} failed")
+        return list(self.entries.get(key, []))
+
+
+@pytest.fixture
+def fake_server():
+    return FakeServerClient("marvin-id")
+
+
+@pytest.fixture
+def connected_auth(make_auth, fake_plextv, fake_server, fake_http, clock, tmp_path):
+    from app.plex_auth import PlexAuth
+
+    auth = PlexAuth(
+        tmp_path / "plex-connected.json",
+        fake_plextv,
+        lambda url, token: fake_server,
+        fake_http.client,
+        clock.now,
+    )
+    auth.start_pin()
+    fake_plextv.claim("tok-1", username="s4m")
+    assert auth.poll_pin().state == "claimed"
+    auth.select_server("marvin-id")
+    return auth
+
+
+@pytest.fixture
+def auth_signed_out(plex_auth):
+    return plex_auth
