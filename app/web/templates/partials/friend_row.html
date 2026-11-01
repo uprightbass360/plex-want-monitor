@@ -1,4 +1,8 @@
-<div class="frow friend-row">
+<div class="frow friend-row{% if not a.monitored %} muted{% endif %}">
+  <form class="monitor-form" hx-post="/fragments/settings/friends/monitor" hx-trigger="change" hx-target="closest .friend-row" hx-swap="outerHTML">
+    <input type="hidden" name="hash" value="{{ a.hash }}">
+    <input type="checkbox" name="monitored" value="1" aria-label="Monitor {{ a.name }}"{% if a.monitored %} checked{% endif %}>
+  </form>
   {% if a.avatar_url %}<img class="avatar" src="{{ a.avatar_url }}" alt="" loading="lazy" width="28" height="28">{% else %}<span class="avatar avatar-none" aria-hidden="true"></span>{% endif %}
   <span class="fname">{{ a.name }}</span>
   {% if a.username and a.display_name and a.display_name != a.username %}<span class="muted">{{ a.username }}</span>{% endif %}

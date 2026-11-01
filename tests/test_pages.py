@@ -669,3 +669,25 @@ def test_header_non_setup_error_is_plain_span(connected_client, store, fetcher):
     html = connected_client.get("/fragments/header-status").text
     assert "502" in html and 'href="/settings"' not in html
     assert re.search(r'<span class="err-text"[^>]*>[^<]*502', html)
+
+
+def test_unmonitored_person_hidden_from_review_and_dropdown_but_in_friends_card(client, seeded):
+    assert "imdb://tt0080421" in client.get("/api/items?include_unmonitored=true").text
+    r = client.post("/fragments/settings/friends/monitor", data={"hash": "friend-a"})
+    assert r.status_code == 200 and "friend-row muted" in r.text and "checked" not in r.text
+    assert "3 items" in r.text  # the total stays
+    html = client.get("/review").text
+    assert '<option value="friend-a"' not in html and '<option value="friend-b"' in html
+    settings = client.get("/settings").text
+    assert 'aria-label="Monitor' in settings and "friend-row muted" in settings
+    assert "Untick someone to hide their items" in settings
+    items = client.get("/api/items").json()["items"]
+    assert len(items) == 2
+    r = client.post("/fragments/settings/friends/monitor", data={"hash": "friend-a", "monitored": "1"})
+    assert "friend-row muted" not in r.text and "checked" in r.text
+    assert '<option value="friend-a"' in client.get("/review").text
+    assert client.get("/api/items").json()["count"] == 5
+
+
+def test_monitor_fragment_unknown_hash_is_404(client, seeded):
+    assert client.post("/fragments/settings/friends/monitor", data={"hash": "nope"}).status_code == 404

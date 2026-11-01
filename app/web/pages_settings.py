@@ -251,6 +251,16 @@ async def resolve_friends(request: Request):
     return templates.TemplateResponse(request, "partials/friends_card.html", {"authors": store.list_authors()})
 
 
+@router.post("/fragments/settings/friends/monitor", response_class=HTMLResponse)
+def monitor_friend(request: Request, hash: Annotated[str, Form()], monitored: Text = None):
+    store = request.app.state.store
+    store.set_author_monitored(hash, monitored is not None)
+    a = next((x for x in store.list_authors() if x.hash == hash), None)
+    if a is None:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(request, "partials/friend_row.html", {"a": a})
+
+
 # ---- page ----
 
 
