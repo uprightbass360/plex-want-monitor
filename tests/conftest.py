@@ -22,3 +22,17 @@ def conn(tmp_path):
 @pytest.fixture
 def fixture_bytes():
     return (Path(__file__).parent / "fixtures" / "friends-feed.xml").read_bytes()
+
+
+@pytest.fixture
+def store(conn):
+    from app.store import Store
+
+    return Store(conn)
+
+
+@pytest.fixture
+def feed_items(fixture_bytes):
+    from app.feed import parse_feed
+
+    return parse_feed(fixture_bytes).items
