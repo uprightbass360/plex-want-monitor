@@ -1,5 +1,6 @@
 from app.lifecycle import apply_not_a_match
 from app.scanner import run_scan
+from app.models import ItemFilter
 
 
 def test_not_connected(store, auth_signed_out, now):
@@ -134,3 +135,12 @@ def test_unselected_libraries_recorded_but_not_listed(store, connected_auth, fak
     log = run_scan(store, connected_auth, now)
     assert log.ok and log.indexed == 1
     assert {"key": "3", "name": "TV Shows", "ok": None, "count": 0, "error": None, "selected": False} in log.libraries
+
+
+def test_scan_matches_items_of_unmonitored_people(store, feed_items, connected_auth, fake_server, now):
+    store.upsert_feed_items(feed_items, now)
+    fake_server.add_movie("2", "Movies", "900", "Kings of Pastry", 2009, ["imdb://tt1558972"])
+    store.set_author_monitored("friend-a", False)
+    assert store.get_item_by_guid("imdb://tt1558972").id not in {i.id for i in store.list_items(ItemFilter())}
+    assert run_scan(store, connected_auth, now).matched == 1
+    assert store.get_item_by_guid("imdb://tt1558972").status == "library"
