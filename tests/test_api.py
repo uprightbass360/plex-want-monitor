@@ -116,3 +116,9 @@ def test_plex_libraries(connected_client, fake_server):
     assert connected_client.get("/api/plex/libraries").json() == [
         {"key": "2", "type": "movie", "title": "Movies"}
     ]
+
+
+def test_settings_unset_defaults(client):
+    body = client.get("/api/settings").json()
+    assert body["feed_url_masked"] is None
+    assert (body["feed_interval_min"], body["scan_interval_min"], body["feed_cap_threshold"]) == (15, 30, 25)

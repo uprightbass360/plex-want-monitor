@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 from app.lifecycle import STATUSES, InvalidTransition, apply_not_a_match, apply_owner_transition
 from app.models import SORTS, ItemFilter, item_to_dict
 from app.plex_client import PlexError
+from app.poller import DEFAULT_CAP_THRESHOLD
+from app.scheduler import DEFAULT_FEED_INTERVAL_MIN, DEFAULT_SCAN_INTERVAL_MIN
 
 router = APIRouter()
 
@@ -167,7 +169,11 @@ def not_a_match(request: Request, item_id: int):
 
 # ---- settings ----
 
-_DEFAULTS = {"feed_interval_min": 15, "scan_interval_min": 60, "feed_cap_threshold": 25}
+_DEFAULTS = {
+    "feed_interval_min": DEFAULT_FEED_INTERVAL_MIN,
+    "scan_interval_min": DEFAULT_SCAN_INTERVAL_MIN,
+    "feed_cap_threshold": DEFAULT_CAP_THRESHOLD,
+}
 
 
 class Friend(BaseModel):
