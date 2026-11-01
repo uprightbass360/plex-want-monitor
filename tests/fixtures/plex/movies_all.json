@@ -1,0 +1,7 @@
+{"MediaContainer": {"Metadata": [
+  {"ratingKey": "14696", "title": "The 'Burbs", "year": 1989, "type": "movie", "guid": "plex://movie/5d776",
+   "Guid": [{"id": "imdb://tt0096734"}, {"id": "tmdb://11974"}, {"id": "tvdb://5869"}]},
+  {"ratingKey": "14697", "title": "Heat", "year": 1995, "type": "movie", "guid": "plex://movie/5d777",
+   "Guid": [{"id": "imdb://tt0113277"}, {"id": "tmdb://949"}]},
+  {"ratingKey": "14698", "title": "The Great Plague", "type": "movie", "guid": "local://14698"}
+]}}

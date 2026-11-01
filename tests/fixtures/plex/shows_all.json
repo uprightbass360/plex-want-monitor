@@ -1,0 +1,6 @@
+{"MediaContainer": {"Metadata": [
+  {"ratingKey": "20001", "title": "Severance", "year": 2022, "type": "show", "guid": "plex://show/5d778",
+   "Guid": [{"id": "imdb://tt11280740"}, {"id": "tmdb://95396"}, {"id": "tvdb://371980"}]},
+  {"ratingKey": "20002", "title": "Andor", "year": 2022, "type": "show", "guid": "plex://show/5d779",
+   "Guid": [{"id": "imdb://tt9253284"}, {"id": "tmdb://83867"}, {"id": "tvdb://393189"}]}
+]}}
