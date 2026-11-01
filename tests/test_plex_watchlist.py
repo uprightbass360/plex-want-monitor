@@ -53,12 +53,16 @@ def test_metadata_call():
 
     def handler(request):
         seen.append(request)
-        return httpx.Response(200, content=body, headers={"Content-Type": "application/json"})
+        d = json.loads(body)
+        if request.url.params.get("includeUserState") != "1":  # plex.tv omits watchlistedAt without it
+            d["MediaContainer"]["Metadata"][0].pop("watchlistedAt", None)
+        return httpx.Response(200, json=d)
 
     meta = _client(handler).metadata("aaaaaaaaaaaaaaaaaaaa0001")
     assert meta.guids == ("imdb://tt0000001", "tmdb://1001", "tvdb://2001")
     assert meta.watchlisted_at == datetime.fromtimestamp(1790822208, UTC)
     r = seen[0]
+    assert r.url.params["includeUserState"] == "1"
     assert r.url.path == "/library/metadata/aaaaaaaaaaaaaaaaaaaa0001" and r.headers["X-Plex-Token"] == TOKEN
     assert TOKEN not in str(r.url)
 

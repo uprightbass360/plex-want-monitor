@@ -70,7 +70,7 @@ class PlexWatchlist:
         raise PlexError("watchlist listing is too long to read completely")
 
     def metadata(self, rating_key: str) -> WatchlistMeta:
-        mc = self._get(f"/library/metadata/{quote(rating_key, safe='')}")
+        mc = self._get(f"/library/metadata/{quote(rating_key, safe='')}?includeUserState=1")
         try:
             meta = (mc.get("Metadata") or [{}])[0]
             guids = tuple(g["id"] for g in meta.get("Guid") or [])
