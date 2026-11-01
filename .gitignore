@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 data/
 .env
+*.egg-info/
+.playwright-mcp/
+docs/superpowers/
+.claude/
+CLAUDE.md
+AGENTS.md

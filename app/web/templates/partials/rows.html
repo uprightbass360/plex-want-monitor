@@ -1,0 +1,14 @@
+{% macro sort_head(label, asc, desc) %}
+{% set active = f.sort in (asc, desc) %}
+<button type="button" class="sort-head" data-sort-asc="{{ asc }}" data-sort-desc="{{ desc }}" aria-sort="{{ ("ascending" if f.sort == asc else "descending") if active else "none" }}">{{ label }} <span class="arrow">{{ "▲" if f.sort == asc else "▼" if active }}</span></button>
+{% endmacro %}
+<div class="row head">
+  <input type="checkbox" id="check-all" aria-label="Select all">
+  <span></span>{{ sort_head("Title", "title", "title_desc") }}{{ sort_head("Type", "type", "type_desc") }}{{ sort_head(tab.age_label, "oldest", "newest") }}<span>Actions</span>
+</div>
+{% if skipped %}<div class="notice">{{ skipped }} item{{ "s" if skipped != 1 }} could not be changed.</div>{% endif %}
+{% for row in rows %}
+{% include "partials/row.html" %}
+{% else %}
+<div class="empty">{{ tab.empty }}</div>
+{% endfor %}

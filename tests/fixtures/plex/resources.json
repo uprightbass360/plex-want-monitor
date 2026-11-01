@@ -1,0 +1,12 @@
+[
+  {"name": "Marvin", "provides": "server", "clientIdentifier": "6b77aaaa1111bbbb2222cccc3333dddd4444eeee", "owned": true, "accessToken": "srv-tok-marvin", "productVersion": "1.43.5.11079",
+   "connections": [
+     {"uri": "https://192-168-0-86.plex.direct:32400", "local": true, "relay": false},
+     {"uri": "https://remote.example:49179", "local": false, "relay": false}
+   ]},
+  {"name": "other-server", "provides": "server", "clientIdentifier": "9f00ffff0000eeee1111dddd2222cccc3333bbbb", "owned": false, "accessToken": "srv-tok-other-server", "productVersion": "1.42.1.10060",
+   "connections": [
+     {"uri": "https://other-server.example:32400", "local": false, "relay": false}
+   ]},
+  {"name": "Living Room TV", "provides": "client,player", "clientIdentifier": "tv-1", "owned": true, "accessToken": null, "productVersion": "9.0", "connections": []}
+]

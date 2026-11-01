@@ -1,0 +1,10 @@
+<section id="json-card" class="card">
+  <h4>JSON export</h4>
+  <ul class="json">
+    <li><code>GET /api/items</code> filters: <code>status</code>, <code>type</code>, <code>q</code>, <code>author</code>, <code>in_feed</code>, <code>sort</code>. Same filters as the tabs.</li>
+    <li><code>GET /api/items/queue.txt</code> the queue as plain-text search strings, one per line.</li>
+    <li><code>POST /api/items/{id}/status</code> body <code>{"status": "queued"}</code> to mark an item from a script.</li>
+    <li><code>GET /api/status</code> counts, last fetch and scan, and Plex sign-in state.</li>
+  </ul>
+  <p class="muted summary">Example: <a href="/api/items?status=review&amp;in_feed=true" target="_blank" rel="noopener"><code>/api/items?status=review&amp;in_feed=true</code></a> ({{ counts.review }} items in Review right now)</p>
+</section>

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ tab.label }} · Want Monitor{% endblock %}
+{% block content %}
+<form id="filters" class="toolbar" hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="change" hx-target="#rows">
+  <input type="hidden" name="tab" value="{{ tab.key }}">
+  <div class="chips" role="radiogroup" aria-label="Type">
+    {% for value, label in (("all", "All"), ("movie", "Movies"), ("show", "Shows")) %}
+    <label class="chip"><input type="radio" name="type" value="{{ value }}"{% if f.type == value %} checked{% endif %}>{{ label }}</label>
+    {% endfor %}
+  </div>
+  {% include "partials/author_select.html" %}
+  <input type="hidden" name="sort" value="{{ f.sort }}">
+  {% if tab.key == "review" %}
+  <label class="field"><input type="checkbox" name="show_removed" value="1"{% if f.show_removed %} checked{% endif %}> show removed</label>
+  {% endif %}
+  <input class="search" type="search" name="q" value="{{ f.q }}" placeholder="search titles…" aria-label="Search titles"
+         hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="keyup changed delay:300ms" hx-target="#rows" hx-include="#filters">
+  {% if tab.key == "grabbed" %}
+  <button type="button" class="btn" hx-post="/fragments/scan" hx-target="#header-status" hx-swap="outerHTML" hx-disabled-elt="this">Scan now</button>
+  {% endif %}
+  {% include "partials/json_link.html" %}
+</form>
+{% include "partials/bulk_bar.html" %}
+<section class="list">
+  <div id="rows" hx-get="/fragments/{{ tab.key }}/rows" hx-trigger="wm-refreshed from:body" hx-include="#filters">
+    {% include "partials/rows.html" %}
+  </div>
+</section>
+{% endblock %}

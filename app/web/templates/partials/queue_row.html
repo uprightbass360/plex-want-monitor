@@ -1,0 +1,23 @@
+<div class="qrow{% if done %} done{% endif %}" id="item-{{ row.id }}" data-item-id="{{ row.id }}">
+  <div class="qinfo">
+    <div class="title">{{ row.title }}{% if row.year %}<small>{{ row.year }}</small>{% endif %} <span class="badge {{ row.type }}">{{ "Movie" if row.type == "movie" else "Show" }}</span></div>
+    {% if row.status_note %}<div class="note muted"><small>{{ row.status_note }}</small></div>{% endif %}
+    {% if row.authors %}<div class="sub">{% for a in row.authors %}{% if a.avatar_url %}<img class="avatar-sm" src="{{ a.avatar_url }}" alt="" loading="lazy" width="16" height="16"> {% endif %}{{ a.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+  </div>
+  <button type="button" class="copybox" data-copy="{{ row.search_string }}" title="Click to copy"><span class="cs">{{ row.search_string }}</span><span class="hint-copy">copy</span><span class="hint-copied">copied</span></button>
+  <div class="actions">
+    {% if done %}
+    <button type="button" class="btn" hx-post="/fragments/items/{{ row.id }}/status" hx-vals='{"status": "queued", "tab": "queue"}' hx-target="closest .qrow" hx-swap="outerHTML">Undo</button>
+    {% else %}
+    <button type="button" class="btn ok" hx-post="/fragments/items/{{ row.id }}/status" hx-vals='{"status": "grabbed", "tab": "queue"}' hx-target="closest .qrow" hx-swap="outerHTML">Got it</button>
+    <button type="button" class="btn" hx-post="/fragments/items/{{ row.id }}/skip" hx-vals='{"tab": "queue"}' hx-include="#filters" hx-target="#rows" hx-swap="beforeend">Skip</button>
+    <details class="menu">
+      <summary class="btn ghost" aria-label="More actions">&middot;&middot;&middot;</summary>
+      <div class="menu-items">
+        <button type="button" class="btn" hx-post="/fragments/items/{{ row.id }}/status" hx-vals='{"status": "review", "tab": "queue"}' hx-target="closest .qrow" hx-swap="outerHTML">Put back</button>
+        <button type="button" class="btn warn" hx-post="/fragments/items/{{ row.id }}/status" hx-vals='{"status": "ignored", "tab": "queue"}' hx-target="closest .qrow" hx-swap="outerHTML">Ignore</button>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</div>
