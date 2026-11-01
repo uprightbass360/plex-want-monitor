@@ -1,0 +1,64 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Plex Watchlist</title>
+    <link>https://rss.plex.tv/00000000-0000-0000-0000-000000000000</link>
+    <description>Plex watchlist for someone's Friends</description>
+    <category>someone</category>
+    <atom:link href="https://rss.plex.tv/00000000-0000-0000-0000-000000000000" rel="self" type="application/rss+xml"></atom:link>
+    <item>
+      <author>friend-a</author>
+      <category>movie</category>
+      <link>https://watch.plex.tv/movie/battle-beyond-the-stars</link>
+      <pubDate>Fri, 11 Sep 2026 04:41:14 GMT</pubDate>
+      <title>Battle Beyond the Stars (1980)</title>
+      <media:thumbnail url="https://images.plex.tv/photo?url=https%3A%2F%2Fmetadata-static.plex.tv%2F9%2Fgracenote%2F9f3d96ae6da722d2259a2996e4fa5d27.jpg&amp;size=large-720"></media:thumbnail>
+      <media:keywords>science fiction, action, adventure</media:keywords>
+      <media:rating scheme="urn:mpaa">pg</media:rating>
+      <guid isPermaLink="false">imdb://tt0080421</guid>
+    </item>
+    <item>
+      <author>friend-b</author>
+      <category>movie</category>
+      <link>https://watch.plex.tv/movie/the-lord-of-the-rings-the-war-of-the-rohirrim</link>
+      <pubDate>Sat, 02 May 2026 06:25:56 GMT</pubDate>
+      <title>The Lord of the Rings: The War of the Rohirrim (2024)</title>
+      <media:thumbnail url="https://images.plex.tv/photo?url=https%3A%2F%2Fmetadata-static.plex.tv%2Fe%2Fgracenote%2Fe1b6e8843a2e4cb30fc2442c519444ba.jpg&amp;size=large-720"></media:thumbnail>
+      <media:keywords>fantasy, animation, history, action, adventure, drama, anime</media:keywords>
+      <media:rating scheme="urn:mpaa">pg-13</media:rating>
+      <guid isPermaLink="false">imdb://tt14824600</guid>
+    </item>
+    <item>
+      <author>friend-a</author>
+      <category>movie</category>
+      <link>https://watch.plex.tv/movie/kings-of-pastry</link>
+      <pubDate>Fri, 10 Apr 2026 00:52:18 GMT</pubDate>
+      <title>Kings of Pastry (2009)</title>
+      <media:thumbnail url="https://images.plex.tv/photo?url=https%3A%2F%2Fmetadata-static.plex.tv%2F4%2Fgracenote%2F4998ac3a131fc6232d9924d44a15b198.jpg&amp;size=large-720"></media:thumbnail>
+      <media:keywords>documentary, drama, family, history</media:keywords>
+      <media:rating scheme="urn:mpaa">not rated</media:rating>
+      <guid isPermaLink="false">imdb://tt1558972</guid>
+    </item>
+    <item>
+      <author>friend-a</author>
+      <category>movie</category>
+      <link>https://watch.plex.tv/movie/the-count-of-monte-cristo-2024</link>
+      <pubDate>Sun, 15 Mar 2026 17:00:04 GMT</pubDate>
+      <title>The Count of Monte Cristo (2024)</title>
+      <media:thumbnail url="https://images.plex.tv/photo?url=https%3A%2F%2Fmetadata-static.plex.tv%2F4%2Fgracenote%2F4ac0f9b7371b853b1e08d584a939de8d.jpg&amp;size=large-720"></media:thumbnail>
+      <media:keywords>drama, action, adventure, romance, thriller, history</media:keywords>
+      <media:rating scheme="urn:mpaa">not rated</media:rating>
+      <guid isPermaLink="false">imdb://tt26446278</guid>
+    </item>
+    <item>
+      <author>friend-b</author>
+      <category>show</category>
+      <link>https://watch.plex.tv/show/severance</link>
+      <pubDate>Mon, 02 Mar 2026 10:00:00 GMT</pubDate>
+      <title>Severance (2022)</title>
+      <media:thumbnail url="https://images.plex.tv/photo?url=https%3A%2F%2Fmetadata-static.plex.tv%2F1%2Fgracenote%2F1111111111111111.jpg&amp;size=large-720"></media:thumbnail>
+      <media:keywords>drama, mystery, science fiction</media:keywords>
+      <media:rating scheme="urn:mpaa">tv-ma</media:rating>
+      <guid isPermaLink="false">imdb://tt11280740</guid>
+    </item>
+  </channel>
+</rss>

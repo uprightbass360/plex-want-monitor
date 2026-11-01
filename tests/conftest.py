@@ -1,3 +1,4 @@
+from pathlib import Path
 from datetime import UTC, datetime
 
 import pytest
@@ -16,3 +17,8 @@ def conn(tmp_path):
     migrate(c)
     yield c
     c.close()
+
+
+@pytest.fixture
+def fixture_bytes():
+    return (Path(__file__).parent / "fixtures" / "friends-feed.xml").read_bytes()
