@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.lifecycle import InvalidTransition, apply_not_a_match, apply_owner_transition
 from app.models import ItemFilter, item_to_dict
+from app.store import StaleStatus
 
 router = APIRouter()
 
@@ -222,6 +223,8 @@ def _row_response(request: Request, tab: Tab, item_id: int, target: str) -> HTML
         return _error_fragment(request, 404, "That item no longer exists.")
     except InvalidTransition as exc:
         return _error_fragment(request, 409, str(exc))
+    except StaleStatus:
+        return _error_fragment(request, 409, "status changed, reload")
     ctx = _context(request, tab, Filters())
     # Queue "Got it" keeps the row on screen, faded, with an Undo button.
     done = tab.key == QUEUE and item.status == "grabbed"
@@ -285,7 +288,7 @@ def bulk(request: Request, status: Annotated[str, Form()], tab: Annotated[str, F
     for item_id in ids or []:
         try:
             _apply(store, item_id, status)
-        except (KeyError, InvalidTransition):
+        except (KeyError, InvalidTransition, StaleStatus):
             skipped += 1
     ctx = _list_context(request, current, f, skipped=skipped)
     return _render([*_rows_parts(current), "partials/counts.html"], ctx, oob=True)

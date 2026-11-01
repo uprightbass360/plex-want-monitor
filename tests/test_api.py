@@ -141,3 +141,18 @@ def test_friends_resolve_api(client, signed_in_auth, seeded, fake_community):
 def test_friends_resolve_signed_out_409(client, seeded):
     r = client.post("/api/friends/resolve")
     assert r.status_code == 409 and r.json() == {"error": "not signed in"}
+
+
+def test_stale_status_maps_to_409(client, seeded, store, monkeypatch):
+    from app.store import StaleStatus
+
+    iid = _ids(client)[0]
+
+    def stale(*a, **kw):
+        raise StaleStatus(iid)
+
+    monkeypatch.setattr(store, "set_status", stale)
+    r = client.post(f"/api/items/{iid}/status", json={"status": "queued"})
+    assert r.status_code == 409 and r.json() == {"error": "status changed, reload"}
+    r = client.post(f"/fragments/items/{iid}/status", data={"status": "queued", "tab": "review"})
+    assert r.status_code == 409 and "status changed, reload" in r.text

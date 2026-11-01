@@ -24,6 +24,7 @@ def test_scan_matches_from_any_status_including_ignored(store, feed_items, conne
 def test_revert_only_when_library_listed_on_same_server(store, feed_items, connected_auth, fake_server, now):
     store.upsert_feed_items(feed_items, now)
     fake_server.add_movie("2", "Movies", "900", "Kings of Pastry", 2009, ["imdb://tt1558972"])
+    fake_server.add_movie("2", "Movies", "950", "Unrelated Film", 1999, [])
     run_scan(store, connected_auth, now)
     fake_server.remove("900")
     log = run_scan(store, connected_auth, now)
@@ -84,10 +85,43 @@ def test_identity_failure(store, connected_auth, fake_server, now):
     assert log.ok is False and log.error == "unreachable"
 
 
-def test_empty_library_reverts(store, feed_items, connected_auth, fake_server, now):
+def test_empty_library_does_not_revert(store, feed_items, connected_auth, fake_server, now):
     store.upsert_feed_items(feed_items, now)
     fake_server.add_movie("2", "Movies", "900", "Kings of Pastry", 2009, ["imdb://tt1558972"])
     run_scan(store, connected_auth, now)
     fake_server.remove("900")
     log = run_scan(store, connected_auth, now)
-    assert log.ok and log.reverted == 1 and log.libraries[0]["count"] == 0
+    assert log.ok and log.reverted == 0
+    assert log.libraries[0] == {"key": "2", "name": "Movies", "ok": True, "count": 0, "error": None}
+    assert store.get_item_by_guid("imdb://tt1558972").status == "library"
+
+
+def test_library_two_to_one_reverts_missing(store, feed_items, connected_auth, fake_server, now):
+    store.upsert_feed_items(feed_items, now)
+    fake_server.add_movie("2", "Movies", "900", "Kings of Pastry", 2009, ["imdb://tt1558972"])
+    fake_server.add_movie("2", "Movies", "901", "The Count of Monte Cristo", 2024, [])
+    run_scan(store, connected_auth, now)
+    fake_server.remove("900")
+    log = run_scan(store, connected_auth, now)
+    assert log.reverted == 1 and log.libraries[0]["count"] == 1
+    assert store.get_item_by_guid("imdb://tt1558972").status == "review"
+    assert store.get_item_by_guid("imdb://tt26446278").status == "library"
+
+
+def test_scan_skips_item_whose_status_changed(store, feed_items, connected_auth, fake_server, now, monkeypatch):
+    from app.store import StaleStatus
+
+    store.upsert_feed_items(feed_items, now)
+    fake_server.add_movie("2", "Movies", "900", "Kings of Pastry", 2009, ["imdb://tt1558972"])
+    calls = []
+    real = store.set_status
+
+    def spy(item_id, status, now, **kw):
+        calls.append(kw.get("expected_from"))
+        raise StaleStatus(item_id)
+
+    monkeypatch.setattr(store, "set_status", spy)
+    log = run_scan(store, connected_auth, now)
+    assert log.ok and log.matched == 0 and calls == ["review"]
+    item = store.get_item_by_guid("imdb://tt1558972")
+    assert item.status == "review" and item.plex_rating_key is None

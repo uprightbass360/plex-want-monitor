@@ -20,6 +20,10 @@ _ORDER = {
 }
 
 
+class StaleStatus(Exception):
+    """The row's status changed since the caller read it (conditional write lost the race)."""
+
+
 def _author(r) -> Author:
     return Author(
         r["hash"], r["label"], r["n"], from_iso(r["last_seen"]),
@@ -190,11 +194,15 @@ class Store:
     def _next_queue_order(self) -> int:
         return self.conn.execute("SELECT COALESCE(MAX(queue_order), 0) + 1 FROM items").fetchone()[0]
 
-    def set_status(self, item_id: int, status: str, now: datetime, *, note: str | None = None) -> Item:
+    def set_status(self, item_id: int, status: str, now: datetime, *, note: str | None = None,
+                   expected_from: str | None = None) -> Item:
+        """Change status; with expected_from, raise StaleStatus if the row is no longer in that status."""
         with self._tx():
             item = self.get_item(item_id)
             if item is None:
                 raise KeyError(item_id)
+            if expected_from is not None and item.status != expected_from:
+                raise StaleStatus(item_id)
             if item.status == status:
                 return item
             order = item.queue_order

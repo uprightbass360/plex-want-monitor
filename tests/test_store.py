@@ -145,3 +145,16 @@ def test_set_author_identity_and_unresolved(store, feed_items, now):
     item = store.get_item_by_guid("imdb://tt0080421")
     d = item_to_dict(item, store.authors_for([item.id])[item.id])
     assert set(d["authors"][0]) == {"hash", "label", "username", "display_name", "avatar_url", "name"}
+
+
+def test_set_status_expected_from_mismatch_raises_stale(store, feed_items, now):
+    import pytest
+
+    from app.store import StaleStatus
+
+    ids, _ = store.upsert_feed_items(feed_items, now)
+    store.set_status(ids[0], "queued", now)
+    with pytest.raises(StaleStatus):
+        store.set_status(ids[0], "ignored", now, expected_from="review")
+    assert store.get_item(ids[0]).status == "queued"
+    assert store.set_status(ids[0], "grabbed", now, expected_from="queued").status == "grabbed"

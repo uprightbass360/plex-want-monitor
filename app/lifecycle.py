@@ -44,7 +44,7 @@ def apply_owner_transition(store, item_id: int, target: str, now: datetime) -> I
     if item is None:
         raise KeyError(item_id)
     check_transition(item.status, target, "owner")
-    return store.set_status(item_id, target, now)
+    return store.set_status(item_id, target, now, expected_from=item.status)
 
 
 def apply_not_a_match(store, item_id: int, now: datetime) -> Item:
@@ -53,7 +53,10 @@ def apply_not_a_match(store, item_id: int, now: datetime) -> Item:
         raise KeyError(item_id)
     if item.status != "library":
         raise InvalidTransition(f"not a match requires library status, got {item.status}")
+    store.set_status(
+        item_id, not_a_match_target(item.previous_status), now, note="not a match", expected_from="library"
+    )
     if item.plex_rating_key:
         store.reject_rating_key(item_id, item.plex_rating_key)
     store.clear_match(item_id)
-    return store.set_status(item_id, not_a_match_target(item.previous_status), now, note="not a match")
+    return store.get_item(item_id)

@@ -10,9 +10,12 @@ from pydantic import BaseModel, Field
 from app.lifecycle import STATUSES, InvalidTransition, apply_not_a_match, apply_owner_transition
 from app.models import SORTS, ItemFilter, item_to_dict
 from app.plex_client import PlexError
+from app.store import StaleStatus
 from app.web.settings_shared import CAP_MAX, CAP_MIN, DEFAULTS, INTERVAL_MAX, INTERVAL_MIN, mask_feed_url
 
 router = APIRouter()
+
+STALE = "status changed, reload"
 
 
 def _now() -> datetime:
@@ -124,6 +127,8 @@ def _transition(store, item_id: int, target: str):
         return None, (404, "item not found")
     except InvalidTransition as exc:
         return None, (409, str(exc))
+    except StaleStatus:
+        return None, (409, STALE)
     return _item_dict(store, item), None
 
 
@@ -163,6 +168,8 @@ def not_a_match(request: Request, item_id: int):
         return _error(404, "item not found")
     except InvalidTransition as exc:
         return _error(409, str(exc))
+    except StaleStatus:
+        return _error(409, STALE)
     return _item_dict(store, item)
 
 
