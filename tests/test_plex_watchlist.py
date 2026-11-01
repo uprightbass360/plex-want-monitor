@@ -135,6 +135,7 @@ def test_leaving_watchlist_sets_in_feed_false_but_not_feed_items(seeded, signed_
     store = seeded
     fake_watchlist.add("rk1", "Fake Movie One", 2001, "movie", ["imdb://tt0000001"])
     fake_watchlist.add("rk3", "Severance", 2022, "show", ["imdb://tt11280740"])
+    fake_watchlist.add("rk4", "Still Here", 2005, "movie", ["imdb://tt0000004"])  # keeps the listing non-empty
     run_watchlist_sync(store, signed_in_auth, now)
     fake_watchlist.remove("rk1")
     fake_watchlist.remove("rk3")
@@ -226,3 +227,34 @@ async def test_watchlist_only_new_items_trigger_scan(store, fetcher, connected_a
     log = await s.fetch_now()  # feed URL unset: feed log fails, watchlist still syncs
     assert log.ok is False and store.last_scan() is not None
     assert store.get_item_by_guid("imdb://tt0000001") is not None
+
+
+def test_watchlist_sync_keeps_feed_metadata_on_both_rows(seeded, signed_in_auth, fake_watchlist, now):
+    store = seeded
+    before = store.get_item_by_guid("imdb://tt11280740")
+    assert before.link
+    fake_watchlist.add("rk3", "Severance", 2022, "show", ["imdb://tt11280740"], content_rating="X", added_at=AT)
+    run_watchlist_sync(store, signed_in_auth, now)
+    after = store.get_item_by_guid("imdb://tt11280740")
+    assert after.source == "both"
+    assert (after.link, after.keywords, after.raw_title, after.pub_date, after.rating, after.thumb) == (
+        before.link, before.keywords, before.raw_title, before.pub_date, before.rating, before.thumb)
+
+
+def test_empty_listing_does_not_mark_items_left(store, signed_in_auth, fake_watchlist, now):
+    _owned(fake_watchlist, signed_in_auth)
+    run_watchlist_sync(store, signed_in_auth, now)
+    fake_watchlist.entries = []
+    log = run_watchlist_sync(store, signed_in_auth, now)
+    assert log.ok and log.item_count == 0
+    assert all(i.in_feed for i in store.list_items(ItemFilter(statuses=None)))
+
+
+def test_exhausted_page_loop_is_an_error(monkeypatch):
+    import app.plex_watchlist as pw
+
+    monkeypatch.setattr(pw, "MAX_PAGES", 2)
+    entry = json.loads((FIX / "watchlist_all.json").read_text())["MediaContainer"]["Metadata"][:1]
+    c = _client(lambda r: _page(entry, 50, int(r.url.params["X-Plex-Container-Start"])))
+    with pytest.raises(PlexError):
+        c.items()

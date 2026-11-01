@@ -80,13 +80,20 @@ class Store:
                     item_id = row["id"]
                     # a row that had left every source starts over; otherwise the sources merge
                     merged = source if not row["in_feed"] or row["source"] == source else "both"
-                    self.conn.execute(
-                        "UPDATE items SET type=?, title=?, raw_title=?, year=?, link=?, thumb=?,"
-                        " keywords=?, rating=?, pub_date=?, last_seen=?, in_feed=1, left_feed_at=NULL,"
-                        " source=? WHERE id=?",
-                        (it.type, it.title, it.raw_title, it.year, it.link, it.thumb,
-                         ",".join(it.keywords), it.rating, to_iso(it.pub_date), ts, merged, item_id),
-                    )
+                    if source == "watchlist" and row["in_feed"] and row["source"] != "watchlist":
+                        # the feed also holds this row: keep its link, keywords, dates and titles
+                        self.conn.execute(
+                            "UPDATE items SET last_seen=?, in_feed=1, left_feed_at=NULL, source=? WHERE id=?",
+                            (ts, merged, item_id),
+                        )
+                    else:
+                        self.conn.execute(
+                            "UPDATE items SET type=?, title=?, raw_title=?, year=?, link=?, thumb=?,"
+                            " keywords=?, rating=?, pub_date=?, last_seen=?, in_feed=1, left_feed_at=NULL,"
+                            " source=? WHERE id=?",
+                            (it.type, it.title, it.raw_title, it.year, it.link, it.thumb,
+                             ",".join(it.keywords), it.rating, to_iso(it.pub_date), ts, merged, item_id),
+                        )
                     seen.append(item_id)
                 if it.author_hash:
                     self.conn.execute(

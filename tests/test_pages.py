@@ -537,3 +537,9 @@ def test_owner_chip_rendered_on_review_row(client, store, signed_in_auth, fake_w
     html = client.get("/review").text
     assert "Fake Movie One" in html and "Owner Me" in html and "https://x/o.png" in html
     assert "author=owner-uuid-0001" in html
+
+
+def test_sync_now_disabled_shows_reason(client, store, signed_in_auth):
+    store.set_setting("own_watchlist_enabled", False)
+    r = client.post("/fragments/settings/watchlist/sync")
+    assert r.status_code == 200 and "Own watchlist disabled." in r.text

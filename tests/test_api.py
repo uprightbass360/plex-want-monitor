@@ -218,3 +218,9 @@ def test_watchlist_sync_api(client, signed_in_auth, fake_watchlist, store):
 def test_watchlist_sync_signed_out_409(client):
     r = client.post("/api/watchlist/sync")
     assert r.status_code == 409 and r.json() == {"error": "not signed in"}
+
+
+def test_watchlist_sync_disabled_is_409(client, signed_in_auth, store):
+    store.set_setting("own_watchlist_enabled", False)
+    r = client.post("/api/watchlist/sync")
+    assert r.status_code == 409 and r.json() == {"error": "own watchlist disabled"}

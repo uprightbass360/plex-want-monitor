@@ -61,8 +61,8 @@ class PlexWatchlist:
                 raise PlexError("watchlist response is incomplete") from None
             start += len(page)
             if not page or start >= total:
-                break
-        return out
+                return out
+        raise PlexError("watchlist listing is too long to read completely")
 
     def external_guids(self, rating_key: str) -> tuple[str, ...]:
         mc = self._get(f"/library/metadata/{quote(rating_key, safe='')}")
@@ -122,7 +122,8 @@ def run_watchlist_sync(store, auth, now: datetime) -> FetchLog:
                 thumb=e.thumb, keywords=(), rating=e.content_rating, pub_date=e.added_at, author_hash=owner,
             ))
         new, _ = store.upsert_feed_items(feed_items, now, source="watchlist")
-        store.mark_left_feed({i.guid for i in feed_items}, now, source="watchlist")
+        if feed_items:  # an empty listing is more likely a hiccup than a cleared watchlist
+            store.mark_left_feed({i.guid for i in feed_items}, now, source="watchlist")
     except PlexError as e:
         return finish(ok=False, error=str(e))
     except Exception as e:  # never echo the text: keep the log free of request details

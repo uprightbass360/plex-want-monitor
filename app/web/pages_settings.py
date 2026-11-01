@@ -99,7 +99,10 @@ async def sync_watchlist(request: Request):
     if request.app.state.auth.watchlist_client() is None:
         return _card(request, "feed_card", _feed_ctx(request, error="Sign in to Plex to sync your watchlist."), 409)
     result = await request.app.state.scheduler.watchlist_now()
-    note = None if result else "A fetch is already running."
+    if result is None:
+        note = "A fetch is already running."
+    else:
+        note = result.error.capitalize() + "." if result.id is None and not result.ok else None
     return _card(request, "feed_card", _feed_ctx(request, note=note))
 
 

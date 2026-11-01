@@ -253,7 +253,11 @@ async def watchlist_sync(request: Request):
     if app.state.auth.watchlist_client() is None:
         return _error(409, _NOT_SIGNED_IN)
     result = await app.state.scheduler.watchlist_now()
-    return jsonable_encoder(result) if result else {"skipped": True}
+    if result is None:
+        return {"skipped": True}
+    if result.id is None and not result.ok:  # not logged: a no-op such as the setting being off
+        return _error(409, result.error)
+    return jsonable_encoder(result)
 
 
 # ---- plex ----
