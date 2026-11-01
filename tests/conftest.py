@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -122,3 +122,125 @@ class PlexTransport:
 @pytest.fixture
 def transport():
     return PlexTransport()
+
+
+class FakeClock:
+    def __init__(self):
+        self._now = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+
+    def now(self):
+        return self._now
+
+    def advance(self, minutes=0):
+        self._now += timedelta(minutes=minutes)
+
+    __call__ = now
+
+
+@pytest.fixture
+def clock():
+    return FakeClock()
+
+
+class FakePlexTV:
+    """In-memory stand-in for PlexTV."""
+
+    def __init__(self, clock):
+        from app.plex_client import Connection, PlexResource
+
+        self.clock = clock
+        self.token = None
+        self.username = None
+        self.resources = [
+            PlexResource(
+                "Marvin", "marvin-id", True, "srv-tok-marvin", "1.43.5",
+                (
+                    Connection("https://local.marvin:32400", True, False),
+                    Connection("https://remote.marvin:49179", False, False),
+                ),
+            ),
+            PlexResource(
+                "other-server", "other-server-id", False, "srv-tok-other-server", "1.42.1",
+                (Connection("https://other-server.example:32400", False, False),),
+            ),
+        ]
+
+    def claim(self, token, username="s4m"):
+        self.token, self.username = token, username
+
+    def create_pin(self):
+        from app.plex_client import Pin
+
+        return Pin(415990614, "ABCD", self.clock.now() + timedelta(minutes=30))
+
+    def check_pin(self, pin_id):
+        return self.token
+
+    def user(self, token):
+        from app.plex_client import PlexUser
+
+        return PlexUser(1, self.username or "s4m")
+
+    def servers(self, token):
+        return list(self.resources)
+
+
+@pytest.fixture
+def fake_plextv(clock):
+    return FakePlexTV(clock)
+
+
+class FakeHttp:
+    """httpx.Client answering /identity with 200 for any host unless dead(uri)."""
+
+    def __init__(self):
+        self.dead_uris = set()
+        self.client = httpx.Client(transport=httpx.MockTransport(self._handle))
+
+    def dead(self, uri):
+        self.dead_uris.add(uri.rstrip("/"))
+
+    def _handle(self, request):
+        u = request.url
+        base = f"{u.scheme}://{u.host}" + (f":{u.port}" if u.port else "")
+        if base in self.dead_uris:
+            raise httpx.ConnectError("dead")
+        return httpx.Response(200, json={"MediaContainer": {}})
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+
+@pytest.fixture
+def fake_http():
+    return FakeHttp()
+
+
+@pytest.fixture
+def make_auth(fake_plextv, fake_http, clock):
+    from app.plex_auth import PlexAuth
+    from app.plex_client import PlexServerClient
+
+    def make(path):
+        return PlexAuth(
+            path,
+            fake_plextv,
+            lambda url, token: PlexServerClient(url, token, fake_http.client),
+            fake_http.client,
+            clock.now,
+        )
+
+    return make
+
+
+@pytest.fixture
+def plex_auth(make_auth, tmp_path):
+    return make_auth(tmp_path / "plex.json")
+
+
+@pytest.fixture
+def signed_in_auth(plex_auth, fake_plextv):
+    plex_auth.start_pin()
+    fake_plextv.claim("tok-1", username="s4m")
+    assert plex_auth.poll_pin().state == "claimed"
+    return plex_auth
